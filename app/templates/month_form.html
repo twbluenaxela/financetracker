@@ -3,7 +3,8 @@
   {{ "編輯" if summary else "新增" }}月份 · 家庭理財
 {% endblock %}
 {% block body %}
-  <header>
+<div class="plain-main">
+  <header style="display:flex;justify-content:space-between;align-items:center;">
     <h1>{{ "編輯" if summary else "新增" }}月份</h1>
     <form method="post" action="/logout"><button type="submit">登出</button></form>
   </header>
@@ -97,4 +98,5 @@
 
     <p style="margin-top:1rem;"><button type="submit">儲存月份</button></p>
   </form>
+</div>
 {% endblock %}
