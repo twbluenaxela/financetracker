@@ -19,7 +19,7 @@
       <tbody>
         {% for s in summaries %}
           <tr style="border-bottom:1px solid #333;">
-            <td>{{ s.year }}-{{ "%02d"|format(s.month) }}</td>
+            <td><a href="/months/{{ s.year }}/{{ s.month }}/edit">{{ s.year }}-{{ "%02d"|format(s.month) }}</a></td>
             <td>${{ "{:,.0f}".format(s.total_income) }}</td>
             <td>${{ "{:,.0f}".format(s.total_expense) }}</td>
             <td style="color:{{ '#27ae60' if s.surplus >= 0 else '#c0392b' }};">

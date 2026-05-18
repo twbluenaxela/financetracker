@@ -15,6 +15,8 @@ from app.db import Base
 
 Money = Numeric(12, 2)
 
+UNCATEGORIZED = "未分類"
+
 
 class User(Base):
     __tablename__ = "users"
@@ -56,6 +58,42 @@ class MonthlySummary(Base):
     @property
     def surplus(self) -> Decimal:
         return self.total_income - self.total_expense
+
+    def _line_total(self, kind: str) -> Decimal:
+        return sum(
+            (line.amount for line in self.lines if line.kind == kind),
+            Decimal(0),
+        )
+
+    def _breakdown(self, kind: str, total: Decimal) -> list[dict]:
+        """Category lines for `kind`, plus a 未分類 row for whatever the
+        lines don't cover. Skipping categories entirely just yields one
+        all-未分類 row."""
+        rows = [
+            {"name": line.name, "amount": line.amount}
+            for line in self.lines
+            if line.kind == kind
+        ]
+        remainder = total - self._line_total(kind)
+        if remainder > 0:
+            rows.append({"name": UNCATEGORIZED, "amount": remainder})
+        return rows
+
+    @property
+    def expense_breakdown(self) -> list[dict]:
+        return self._breakdown("expense", self.total_expense)
+
+    @property
+    def income_breakdown(self) -> list[dict]:
+        return self._breakdown("income", self.total_income)
+
+    @property
+    def expense_over_entered(self) -> bool:
+        return self._line_total("expense") > self.total_expense
+
+    @property
+    def income_over_entered(self) -> bool:
+        return self._line_total("income") > self.total_income
 
 
 class CategoryLine(Base):
