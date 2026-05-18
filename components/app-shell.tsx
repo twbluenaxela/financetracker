@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import type { User } from "@prisma/client";
 
 import { Sidebar } from "@/components/sidebar";
+
+export type SessionUser = { uid: string; email: string | null; name: string | null };
 
 export function AppShell({
   children,
@@ -9,7 +10,7 @@ export function AppShell({
   memberCount,
 }: {
   children: ReactNode;
-  user: User;
+  user: SessionUser;
   memberCount: number;
 }) {
   return (

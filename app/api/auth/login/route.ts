@@ -1,33 +1,18 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 
-import {
-  createSessionToken,
-  getSessionCookieName,
-  getSessionCookieOptions,
-  verifyUserPassword,
-} from "@/lib/auth";
-
-const schema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-});
+import { createSession } from "@/lib/auth";
 
 export async function POST(request: Request) {
-  const json = await request.json();
-  const parsed = schema.safeParse(json);
+  const { idToken } = await request.json().catch(() => ({}));
 
-  if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_input" }, { status: 400 });
+  if (!idToken || typeof idToken !== "string") {
+    return NextResponse.json({ error: "missing_token" }, { status: 400 });
   }
 
-  const user = await verifyUserPassword(parsed.data.email, parsed.data.password);
-  if (!user) {
-    return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
+  try {
+    await createSession(idToken);
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "invalid_token" }, { status: 401 });
   }
-
-  const token = await createSessionToken(user.id);
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set(getSessionCookieName(), token, getSessionCookieOptions());
-  return response;
 }
