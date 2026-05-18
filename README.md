@@ -12,8 +12,9 @@ Alembic migrations, deployed on Fly.io.
 ## Status
 
 - [x] Phase 1 — scaffold: app, Postgres, migrations, two-user auth, Fly config
-- [ ] Phase 2 — transaction CSV import (column mapping, de-dup, history)
-- [ ] Phase 3 — cash-flow dashboard (monthly income/expense/surplus)
+- [x] Phase 2 — monthly-summary entry (income/expense + optional categories),
+      manually keyed from 快速記帳 screenshots (CSV export is paywalled)
+- [ ] Phase 3 — cash-flow dashboard (trends, category breakdown, charts)
 - [ ] Phase 4 — goals (短期 / 中期 / 長期)
 - [ ] Phase 5 — savings-plan engine (projections + gap analysis)
 - [ ] Phase 6 — polish (charts, monthly review)
