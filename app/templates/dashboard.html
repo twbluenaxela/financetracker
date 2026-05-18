@@ -1,25 +1,25 @@
 {% extends "base.html" %}
-{% block title %}Dashboard · Finance Tracker{% endblock %}
+{% block title %}總覽 · 家庭理財{% endblock %}
 {% block body %}
   <header>
-    <h1>Dashboard</h1>
+    <h1>總覽</h1>
     <form method="post" action="/logout">
-      <button type="submit">Sign out</button>
+      <button type="submit">登出</button>
     </form>
   </header>
-  <p>Signed in as <strong>{{ user.email }}</strong> · <a href="/months">Monthly summaries</a></p>
+  <p>已登入：<strong>{{ user.email }}</strong> · <a href="/months">每月收支</a></p>
 
   {% if not recent %}
     <p class="muted">
-      No data yet. <a href="/months/new">Add a month</a> from a 快速記帳 screenshot
-      to start tracking cash flow.
+      尚無資料。請從 快速記帳 共享帳本的月檢視畫面
+      <a href="/months/new">新增月份</a>，即可開始追蹤現金流。
     </p>
   {% else %}
-    <h3>Recent months</h3>
+    <h3>近期月份</h3>
     <table style="width:100%; border-collapse:collapse;">
       <thead>
         <tr style="text-align:left; border-bottom:1px solid #888;">
-          <th>Month</th><th>Income</th><th>Expense</th><th>Surplus</th>
+          <th>月份</th><th>收入</th><th>支出</th><th>結餘</th>
         </tr>
       </thead>
       <tbody>
@@ -35,6 +35,6 @@
         {% endfor %}
       </tbody>
     </table>
-    <p class="muted">Next: goals (短/中/長期) and the savings-plan engine that projects from this surplus.</p>
+    <p class="muted">接下來：理財目標（短期 / 中期 / 長期）與依結餘推算的儲蓄計畫引擎。</p>
   {% endif %}
 {% endblock %}
