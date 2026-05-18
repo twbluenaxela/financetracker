@@ -2,64 +2,8 @@
 {% block title %}總覽 · 家庭理財{% endblock %}
 {% block body %}
 <div class="app">
-  <aside class="sidebar">
-    <div class="brand">
-      <div class="brand-mark">
-        <svg viewBox="0 0 32 32" width="22" height="22">
-          <path d="M6 22 L13 12 L18 18 L26 8" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          <circle cx="26" cy="8" r="2.5" fill="currentColor"/>
-        </svg>
-      </div>
-      <div>
-        <div class="brand-name">家庭理財</div>
-        <div class="brand-sub">Shared Ledger</div>
-      </div>
-    </div>
-    <nav class="nav">
-      <a class="nav-item active" href="/">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 12 3l9 8M5 10v10h14V10"/></svg>
-        <span>總覽</span>
-      </a>
-      <a class="nav-item" href="/months">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM4 9h16M8 5v14"/></svg>
-        <span>每月收支</span>
-      </a>
-      <a class="nav-item" href="#">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M12 7l4 5-4 5-4-5z"/></svg>
-        <span>理財目標</span>
-      </a>
-      <a class="nav-item" href="#">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m0 0 4-4m-4 4-4-4M4 20h16"/></svg>
-        <span>匯入快速記帳</span>
-      </a>
-      <a class="nav-item" href="#">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
-        <span>設定</span>
-      </a>
-    </nav>
-    <div class="sidebar-foot">
-      <div class="ledger-card">
-        <div class="ledger-card-row">
-          <span class="muted">共享帳本</span>
-          <span class="dot dot-live"></span>
-        </div>
-        <div class="ledger-card-title">家庭理財</div>
-        <div class="ledger-card-meta">2 位成員 · TWD</div>
-      </div>
-      <div class="user-pill">
-        <div class="avatar">{{ user_initial }}</div>
-        <div class="user-info">
-          <div class="user-name">{{ user_display }}</div>
-          <div class="user-email">{{ user.email }}</div>
-        </div>
-        <form method="post" action="/logout">
-          <button class="icon-btn" title="登出" aria-label="登出" type="submit">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 12H4M4 12l4-4M4 12l4 4M10 4h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-8"/></svg>
-          </button>
-        </form>
-      </div>
-    </div>
-  </aside>
+  {% set active = 'home' %}
+  {% include "_sidebar.html" %}
 
   <main class="main">
     {% if not has_data %}
@@ -216,14 +160,41 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="card goals-card">
         <div class="card-head">
           <div>
             <div class="card-title">理財目標</div>
-            <div class="card-sub muted">短期 / 中期 / 長期 · 即將推出</div>
+            <div class="card-sub muted">依近 6 個月平均結餘自動配置 · 短期 50% / 中期 30% / 長期 20%</div>
           </div>
+          <a class="link-btn" href="/goals">調整配置 →</a>
         </div>
-        <p class="muted" style="margin:0;">尚未設定理財目標。下一階段將依本月結餘自動配置短/中/長期儲蓄計畫。</p>
+        {% if goals %}
+        <div class="goals-grid">
+          {% for g in goals %}
+          <div class="goal">
+            <div class="goal-head">
+              <span class="goal-tier" data-tier="{{ g.tier }}">{{ g.tier }}</span>
+              <span class="goal-eta muted">完成於 {{ g.eta }}</span>
+            </div>
+            <div class="goal-label">{{ g.label }}</div>
+            <div class="goal-fig">
+              <span class="goal-current">{{ g.current|compact }}</span>
+              <span class="goal-of muted">/ {{ g.target|compact }}</span>
+            </div>
+            <div class="goal-track">
+              <div class="goal-fill" style="width:{{ '%.1f'|format(g.pct) }}%"></div>
+              <div class="goal-tick" style="left:{{ '%.1f'|format(g.pct) }}%"></div>
+            </div>
+            <div class="goal-foot">
+              <span class="muted">本月配置</span>
+              <strong>+{{ g.alloc|money }}</strong>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="muted" style="margin:0;">尚無理財目標。<a class="link-btn" href="/goals" style="display:inline;">前往新增 →</a></p>
+        {% endif %}
       </div>
 
       <div class="card recent-card">

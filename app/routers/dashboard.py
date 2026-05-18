@@ -7,7 +7,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import UNCATEGORIZED, MonthlySummary, User
+from app.models import GOAL_TIERS, UNCATEGORIZED, Goal, MonthlySummary, User
+
+_TIER_WEIGHT = {"短期": Decimal("0.5"), "中期": Decimal("0.3"), "長期": Decimal("0.2")}
 from app.security import current_user
 from app.templating import templates
 
@@ -178,6 +180,52 @@ def dashboard(
             }
         )
 
+    # ---- goals + auto-allocation from trailing-average surplus ----
+    window = months[-6:]
+    trailing = (
+        sum((m.surplus for m in window), Decimal(0)) / len(window)
+        if window
+        else Decimal(0)
+    )
+    all_goals = (
+        db.execute(select(Goal).order_by(Goal.priority, Goal.id))
+        .scalars()
+        .all()
+    )
+    active_by_tier = {t: 0 for t in GOAL_TIERS}
+    for g in all_goals:
+        if g.remaining > 0:
+            active_by_tier[g.tier] += 1
+
+    goals_view = []
+    for g in all_goals:
+        cnt = active_by_tier.get(g.tier, 0)
+        if trailing > 0 and cnt and g.remaining > 0:
+            alloc = _TIER_WEIGHT[g.tier] * trailing / cnt
+        else:
+            alloc = Decimal(0)
+        if g.target_date:
+            eta = f"{g.target_date.year} 年 {g.target_date.month} 月"
+        elif alloc > 0 and g.remaining > 0:
+            mths = int(-(-g.remaining // alloc))
+            ey, em = current.year + (current.month - 1 + mths) // 12, (
+                current.month - 1 + mths
+            ) % 12 + 1
+            eta = f"約 {ey} 年 {em} 月"
+        else:
+            eta = "—"
+        goals_view.append(
+            {
+                "tier": g.tier,
+                "label": g.label,
+                "current": g.current_amount,
+                "target": g.target_amount,
+                "pct": g.progress_pct,
+                "eta": eta,
+                "alloc": alloc,
+            }
+        )
+
     js_day = (date(current.year, current.month, 18).weekday() + 1) % 7
     week_no = -(-(js_day + 18) // 7)  # ceil
 
@@ -211,5 +259,7 @@ def dashboard(
             "cat_total": cat_total,
             "cat_rows": cat_rows,
             "recent": recent,
+            "goals": goals_view,
+            "trailing_surplus": trailing,
         },
     )

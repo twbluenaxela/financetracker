@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    Date,
     DateTime,
     ForeignKey,
     Numeric,
@@ -110,3 +111,63 @@ class CategoryLine(Base):
     amount: Mapped[Decimal] = mapped_column(Money, default=0)
 
     summary: Mapped[MonthlySummary] = relationship(back_populates="lines")
+
+
+GOAL_TIERS = ("短期", "中期", "長期")
+
+
+class Goal(Base):
+    """A shared savings goal (短期 / 中期 / 長期)."""
+
+    __tablename__ = "goals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tier: Mapped[str] = mapped_column(String(4), default="短期")
+    label: Mapped[str] = mapped_column(String(100))
+    target_amount: Mapped[Decimal] = mapped_column(Money, default=0)
+    current_amount: Mapped[Decimal] = mapped_column(Money, default=0)
+    target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    priority: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    @property
+    def progress_pct(self) -> float:
+        if self.target_amount <= 0:
+            return 0.0
+        return min(
+            100.0, float(self.current_amount) / float(self.target_amount) * 100
+        )
+
+    @property
+    def remaining(self) -> Decimal:
+        return max(Decimal(0), self.target_amount - self.current_amount)
+
+
+class InvestmentPlan(Base):
+    """Single shared investment plan (one row, id=1)."""
+
+    __tablename__ = "investment_plans"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    starting_capital: Mapped[Decimal] = mapped_column(Money, default=0)
+    monthly_contribution: Mapped[Decimal] = mapped_column(Money, default=0)
+    target_amount: Mapped[Decimal] = mapped_column(Money, default=0)
+    tw_stock_pct: Mapped[int] = mapped_column(default=30)
+    us_stock_pct: Mapped[int] = mapped_column(default=40)
+    bond_pct: Mapped[int] = mapped_column(default=30)
+    tw_stock_return: Mapped[Decimal] = mapped_column(
+        Numeric(5, 4), default=Decimal("0.06")
+    )
+    us_stock_return: Mapped[Decimal] = mapped_column(
+        Numeric(5, 4), default=Decimal("0.07")
+    )
+    bond_return: Mapped[Decimal] = mapped_column(
+        Numeric(5, 4), default=Decimal("0.03")
+    )
+    age: Mapped[int | None] = mapped_column(nullable=True)
+    risk: Mapped[str] = mapped_column(String(12), default="moderate")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

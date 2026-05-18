@@ -34,7 +34,8 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
 body {
-  font-family: "Manrope", "Noto Sans TC", system-ui, -apple-system, sans-serif;
+  font-family: "Manrope", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei",
+    "Noto Sans CJK TC", "Heiti TC", system-ui, -apple-system, sans-serif;
   font-feature-settings: "ss01", "cv11";
   font-size: 14px;
   line-height: 1.45;

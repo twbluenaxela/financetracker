@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import get_settings
-from app.routers import auth, dashboard, months
+from app.routers import auth, dashboard, goals, invest, months
 
 settings = get_settings()
 
@@ -27,6 +27,8 @@ app.mount(
 app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(months.router)
+app.include_router(goals.router)
+app.include_router(invest.router)
 
 
 @app.get("/healthz")
