@@ -1,4 +1,4 @@
-app = "financetracker"
+app = "financetrackertw"
 primary_region = "nrt"
 
 [build]
