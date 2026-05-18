@@ -126,6 +126,9 @@ class Goal(Base):
     label: Mapped[str] = mapped_column(String(100))
     target_amount: Mapped[Decimal] = mapped_column(Money, default=0)
     current_amount: Mapped[Decimal] = mapped_column(Money, default=0)
+    expected_annual_return: Mapped[Decimal] = mapped_column(
+        Numeric(5, 4), default=Decimal("0.05")
+    )
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     priority: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(

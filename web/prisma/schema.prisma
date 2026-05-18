@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("users")
+}
+
+model MonthlySummary {
+  id           Int            @id @default(autoincrement())
+  year         Int
+  month        Int
+  totalIncome  Decimal        @default(0) @map("total_income") @db.Decimal(12, 2)
+  totalExpense Decimal        @default(0) @map("total_expense") @db.Decimal(12, 2)
+  currency     String         @default("TWD") @db.VarChar(3)
+  note         String?        @db.VarChar(500)
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lines        CategoryLine[]
+
+  @@unique([year, month], map: "uq_year_month")
+  @@map("monthly_summaries")
+}
+
+model CategoryLine {
+  id        Int            @id @default(autoincrement())
+  summaryId Int            @map("summary_id")
+  kind      String         @default("expense") @db.VarChar(10)
+  name      String         @db.VarChar(100)
+  amount    Decimal        @default(0) @db.Decimal(12, 2)
+  summary   MonthlySummary @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+
+  @@index([summaryId])
+  @@map("category_lines")
+}
+
+model Goal {
+  id                   Int      @id @default(autoincrement())
+  tier                 String   @default("短期") @db.VarChar(4)
+  label                String   @db.VarChar(100)
+  targetAmount         Decimal  @default(0) @map("target_amount") @db.Decimal(12, 2)
+  currentAmount        Decimal  @default(0) @map("current_amount") @db.Decimal(12, 2)
+  expectedAnnualReturn Decimal  @default(0.05) @map("expected_annual_return") @db.Decimal(5, 4)
+  targetDate           DateTime? @map("target_date") @db.Date
+  priority             Int      @default(0)
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("goals")
+}
+
+model InvestmentPlan {
+  id                  Int      @id @default(autoincrement())
+  startingCapital     Decimal  @default(0) @map("starting_capital") @db.Decimal(12, 2)
+  monthlyContribution Decimal  @default(0) @map("monthly_contribution") @db.Decimal(12, 2)
+  targetAmount        Decimal  @default(0) @map("target_amount") @db.Decimal(12, 2)
+  twStockPct          Int      @default(30) @map("tw_stock_pct")
+  usStockPct          Int      @default(40) @map("us_stock_pct")
+  bondPct             Int      @default(30) @map("bond_pct")
+  twStockReturn       Decimal  @default(0.06) @map("tw_stock_return") @db.Decimal(5, 4)
+  usStockReturn       Decimal  @default(0.07) @map("us_stock_return") @db.Decimal(5, 4)
+  bondReturn          Decimal  @default(0.03) @map("bond_return") @db.Decimal(5, 4)
+  age                 Int?
+  risk                String   @default("moderate") @db.VarChar(12)
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("investment_plans")
+}

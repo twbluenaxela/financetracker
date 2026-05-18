@@ -14,6 +14,11 @@ from app.templating import templates
 router = APIRouter()
 
 
+def _ctx(user: User):
+    d = user.email.split("@")[0]
+    return {"user": user, "user_display": d, "user_initial": d[:1].upper()}
+
+
 def _parse_money(raw: str | None) -> Decimal | None:
     if raw is None:
         return None
@@ -41,7 +46,9 @@ def list_months(
         )
     ).scalars().all()
     return templates.TemplateResponse(
-        request, "months_list.html", {"user": user, "summaries": summaries}
+        request,
+        "months_list.html",
+        {**_ctx(user), "summaries": summaries},
     )
 
 
@@ -54,7 +61,7 @@ def new_month(request: Request, user: User | None = Depends(current_user)):
         request,
         "month_form.html",
         {
-            "user": user,
+            **_ctx(user),
             "summary": None,
             "form": {"year": today.year, "month": today.month},
             "error": None,
@@ -83,7 +90,7 @@ def edit_month(
         request,
         "month_form.html",
         {
-            "user": user,
+            **_ctx(user),
             "summary": summary,
             "form": {
                 "year": summary.year,
@@ -113,7 +120,7 @@ async def upsert_month(
             request,
             "month_form.html",
             {
-                "user": user,
+                **_ctx(user),
                 "summary": None,
                 "form": dict(form),
                 "error": message,
