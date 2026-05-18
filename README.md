@@ -1,106 +1,67 @@
-# Finance Tracker
+# Next.js Migration Scaffold
 
-A private finances app for two people: set short/medium/long-term goals,
-analyze cash flow (imported from 快速記帳), and get a savings plan that
-recomputes from your real numbers.
+This folder is the starting point for replacing the FastAPI + Jinja app
+with a full Next.js app.
 
-**Stack:** FastAPI + Jinja (server-rendered), Postgres (Neon, managed),
-Alembic migrations, deployed on Fly.io.
+## Why this shape
 
----
+- `app/` replaces server-rendered Jinja routes
+- `prisma/` replaces SQLAlchemy models for the new stack
+- `app/api/` replaces FastAPI route handlers
+- `lib/auth.ts` verifies the **existing Argon2 password hashes**, so you
+  do not need to reset users during migration
 
-## Status
+## Current migration status
 
-- [x] Phase 1 — scaffold: app, Postgres, migrations, two-user auth, Fly config
-- [x] Phase 2 — monthly-summary entry (income/expense + optional categories),
-      manually keyed from 快速記帳 screenshots (CSV export is paywalled)
-- [x] Phase 3 — dark dashboard (12-month cashflow chart, 支出分類, 近期月份),
-      self-hosted fonts (no CDN)
-- [x] Phase 4 — goals (短期 / 中期 / 長期) with auto-allocation from
-      trailing-average surplus
-- [x] Phase 5 — investment engine: adjustable 台股/美股/債券 portfolio,
-      blended return, Bogleheads heuristic, compound projection (lump +
-      periodic) matching the Mr. Market spreadsheet exactly
-- [ ] Phase 6 — polish (interactive chart, monthly review, fine-tuning)
+- Prisma schema mirrors the current Postgres tables
+- Dashboard, months, goals, and invest pages exist as server-component
+  placeholders reading real DB data
+- Login/logout route handlers exist
+- Shared shell exists, but it is intentionally minimal
 
-There is **no public signup**. The only accounts are the two you create
-with `scripts/seed_users.py`.
+## Recommended migration order
 
----
-
-## Local development
-
-Requires Python 3.11 and Docker (for the local Postgres).
+1. Install dependencies:
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-
-cp .env.example .env          # then edit SESSION_SECRET
-docker compose up -d db       # local Postgres on :5432
-
-alembic upgrade head          # create tables
-python -m scripts.seed_users you@example.com 'your-password'
-python -m scripts.seed_users wife@example.com 'her-password'
-
-uvicorn app.main:app --reload
+cd web
+npm install
 ```
 
-Open http://localhost:8000 — you'll be sent to `/login`.
-
-### Database migrations
-
-After changing models in `app/models.py`:
+2. Copy env:
 
 ```bash
-alembic revision --autogenerate -m "describe the change"
-alembic upgrade head
+cp .env.example .env.local
 ```
 
----
-
-## Deploying to Fly.io with Neon
-
-### 1. Create the Neon database (you do this once, in the browser)
-
-1. Sign up at https://neon.tech and create a project.
-2. Copy the connection string (looks like
-   `postgresql://USER:PASSWORD@HOST/DB?sslmode=require`).
-
-Neon handles automated backups and **point-in-time restore** for you —
-that is your data-safety story. No backup code lives in this repo.
-
-### 2. Launch the Fly app
+3. Generate Prisma client:
 
 ```bash
-fly launch --no-deploy        # accept/edit the app name; keep fly.toml
-
-fly secrets set \
-  DATABASE_URL='postgresql://USER:PASSWORD@HOST/DB?sslmode=require' \
-  SESSION_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
-
-fly deploy
+npm run prisma:generate
 ```
 
-`fly deploy` runs `alembic upgrade head` automatically (see `[deploy]`
-in `fly.toml`) before the new version goes live.
-
-### 3. Create the two accounts (once)
+4. Start the app:
 
 ```bash
-fly ssh console -C "python -m scripts.seed_users you@example.com 'pw'"
-fly ssh console -C "python -m scripts.seed_users wife@example.com 'pw'"
+npm run dev
 ```
 
----
+## Cutover strategy
 
-## Data safety summary
+1. Keep FastAPI live while you rebuild the UI in Next.
+2. Point Next directly at the same Postgres database first.
+3. Recreate each page in this order:
+   - `/login`
+   - `/`
+   - `/months`
+   - `/months/new` and edit
+   - `/goals`
+   - `/invest`
+4. After parity, replace FastAPI mutations with Next route handlers.
+5. Only then retire the Python web layer.
 
-- **Backups / restore:** handled by Neon (automated + point-in-time).
-  Periodically test a restore — an untested backup is not a backup.
-- **In transit:** HTTPS enforced by Fly (`force_https`); Neon requires
-  TLS (`sslmode=require`).
-- **Auth:** Argon2-hashed passwords, signed `Secure` session cookies,
-  no public signup route.
-- **Secrets:** `DATABASE_URL` and `SESSION_SECRET` live in `fly secrets`,
-  never in git (`.env` is gitignored).
+## Important note
+
+Do not try to migrate both the UI and the financial engine at the same
+time. First move rendering and forms. Then move the advanced
+robo-advisor/data pipeline.
