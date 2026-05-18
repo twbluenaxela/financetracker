@@ -7,9 +7,34 @@
       <button type="submit">Sign out</button>
     </form>
   </header>
-  <p>Signed in as <strong>{{ user.email }}</strong>.</p>
-  <p class="muted">
-    Phase 1 scaffold. Next phases: transaction import, cash-flow analysis,
-    goals, and the savings-plan engine.
-  </p>
+  <p>Signed in as <strong>{{ user.email }}</strong> · <a href="/months">Monthly summaries</a></p>
+
+  {% if not recent %}
+    <p class="muted">
+      No data yet. <a href="/months/new">Add a month</a> from a 快速記帳 screenshot
+      to start tracking cash flow.
+    </p>
+  {% else %}
+    <h3>Recent months</h3>
+    <table style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="text-align:left; border-bottom:1px solid #888;">
+          <th>Month</th><th>Income</th><th>Expense</th><th>Surplus</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in recent %}
+          <tr style="border-bottom:1px solid #333;">
+            <td><a href="/months/{{ s.year }}/{{ s.month }}/edit">{{ s.year }}-{{ "%02d"|format(s.month) }}</a></td>
+            <td>${{ "{:,.0f}".format(s.total_income) }}</td>
+            <td>${{ "{:,.0f}".format(s.total_expense) }}</td>
+            <td style="color:{{ '#27ae60' if s.surplus >= 0 else '#c0392b' }};">
+              ${{ "{:,.0f}".format(s.surplus) }}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted">Next: goals (短/中/長期) and the savings-plan engine that projects from this surplus.</p>
+  {% endif %}
 {% endblock %}

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}
+  {{ "Edit" if summary else "Add" }} month · Finance Tracker
+{% endblock %}
+{% block body %}
+  <header>
+    <h1>{{ "Edit" if summary else "Add" }} a month</h1>
+    <form method="post" action="/logout"><button type="submit">Sign out</button></form>
+  </header>
+  <p><a href="/months">← Monthly summaries</a></p>
+  <p class="muted">
+    Open the 快速記帳 monthly view for the month, then copy the totals here.
+    Category rows are optional — fill what the screenshot shows.
+  </p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+  <form method="post" action="/months">
+    <label>Year
+      <input type="number" name="year" min="2000" max="2100"
+             value="{{ form.year }}" required />
+    </label>
+    <label>Month
+      <select name="month" required>
+        {% for m in range(1, 13) %}
+          <option value="{{ m }}"
+            {{ "selected" if form.month|int == m else "" }}>
+            {{ "%02d"|format(m) }}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>Total income (月收入, TWD)
+      <input type="number" step="0.01" min="0" name="total_income"
+             value="{{ form.total_income if form.total_income is not none else '' }}" />
+    </label>
+    <label>Total expense (月支出, TWD)
+      <input type="number" step="0.01" min="0" name="total_expense"
+             value="{{ form.total_expense if form.total_expense is not none else '' }}" />
+    </label>
+    <label>Note (optional)
+      <input type="text" name="note" value="{{ form.note or '' }}" />
+    </label>
+
+    <h3>Category breakdown <span class="muted">(optional)</span></h3>
+    <div id="cats">
+      {% set existing = summary.lines if summary else [] %}
+      {% for line in existing %}
+        <div style="display:flex; gap:0.5rem;">
+          <select name="cat_kind" style="flex:0 0 90px;">
+            <option value="expense" {{ "selected" if line.kind == "expense" else "" }}>支出</option>
+            <option value="income" {{ "selected" if line.kind == "income" else "" }}>收入</option>
+          </select>
+          <input name="cat_name" placeholder="購物 / 晚餐 …" value="{{ line.name }}" style="flex:1;" />
+          <input name="cat_amount" type="number" step="0.01" min="0"
+                 value="{{ line.amount }}" style="flex:0 0 120px;" />
+        </div>
+      {% endfor %}
+      {% for _ in range(6) %}
+        <div style="display:flex; gap:0.5rem;">
+          <select name="cat_kind" style="flex:0 0 90px;">
+            <option value="expense">支出</option>
+            <option value="income">收入</option>
+          </select>
+          <input name="cat_name" placeholder="購物 / 晚餐 …" style="flex:1;" />
+          <input name="cat_amount" type="number" step="0.01" min="0" style="flex:0 0 120px;" />
+        </div>
+      {% endfor %}
+    </div>
+
+    <p style="margin-top:1rem;"><button type="submit">Save month</button></p>
+  </form>
+{% endblock %}

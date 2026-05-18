@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Monthly summaries · Finance Tracker{% endblock %}
+{% block body %}
+  <header>
+    <h1>Monthly summaries</h1>
+    <form method="post" action="/logout"><button type="submit">Sign out</button></form>
+  </header>
+  <p><a href="/">← Dashboard</a> · <a href="/months/new">+ Add a month</a></p>
+
+  {% if not summaries %}
+    <p class="muted">No months recorded yet. <a href="/months/new">Add your first month</a> from a 快速記帳 screenshot.</p>
+  {% else %}
+    <table style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="text-align:left; border-bottom:1px solid #888;">
+          <th>Month</th><th>Income</th><th>Expense</th><th>Surplus</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in summaries %}
+          <tr style="border-bottom:1px solid #333;">
+            <td>{{ s.year }}-{{ "%02d"|format(s.month) }}</td>
+            <td>${{ "{:,.0f}".format(s.total_income) }}</td>
+            <td>${{ "{:,.0f}".format(s.total_expense) }}</td>
+            <td style="color:{{ '#27ae60' if s.surplus >= 0 else '#c0392b' }};">
+              ${{ "{:,.0f}".format(s.surplus) }}
+            </td>
+            <td>
+              <a href="/months/{{ s.year }}/{{ s.month }}/edit">edit</a>
+              <form method="post" action="/months/{{ s.year }}/{{ s.month }}/delete"
+                    style="display:inline;"
+                    onsubmit="return confirm('Delete {{ s.year }}-{{ s.month }}?');">
+                <button type="submit" style="border:none; background:none; color:#c0392b; cursor:pointer;">delete</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endblock %}
