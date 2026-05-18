@@ -43,6 +43,9 @@
         <label class="field"><span>目標日期（選填）</span>
           <input type="date" name="target_date" value="{{ editing.target_date.isoformat() if editing and editing.target_date else '' }}" />
         </label>
+        <label class="field"><span>預期年化報酬率 %</span>
+          <input type="number" name="expected_annual_return" step="0.1" min="0" max="20" value="{{ '%.2f'|format((editing.expected_annual_return if editing else 0.05) * 100) }}" />
+        </label>
         <label class="field"><span>優先順序（數字越小越優先）</span>
           <input type="number" name="priority" step="1" value="{{ editing.priority if editing else 0 }}" />
         </label>
@@ -81,9 +84,10 @@
             <div class="goal-tick" style="left:{{ '%.1f'|format(g.progress_pct) }}%"></div>
           </div>
           <div class="goal-foot">
-            <span class="muted">{% if v.required %}達標需每月{% else %}尚差{% endif %}</span>
+            <span class="muted">{% if v.required %}PMT 每月需投入{% else %}尚差{% endif %}</span>
             <strong>{% if v.required %}{{ v.required|money }}{% else %}{{ g.remaining|money }}{% endif %}</strong>
           </div>
+          <div class="muted" style="margin-top:8px; font-size:12px;">假設年化 {{ '%.2f'|format(g.expected_annual_return * 100) }}%</div>
           <div style="display:flex; gap:12px; margin-top:12px; font-size:12px;">
             <a class="link-btn" href="/goals?edit={{ g.id }}">編輯</a>
             <form method="post" action="/goals/{{ g.id }}/delete" onsubmit="return confirm('刪除「{{ g.label }}」？');">

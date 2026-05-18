@@ -10,6 +10,7 @@ from app.db import get_db
 from app.models import GOAL_TIERS, Goal, User
 from app.security import current_user
 from app.templating import templates
+from app.wealth import required_monthly_savings
 
 router = APIRouter()
 
@@ -22,6 +23,12 @@ def _money(raw: str | None) -> Decimal:
     except InvalidOperation:
         return Decimal(0)
     return v if v >= 0 else Decimal(0)
+
+
+def _pct(raw: str | None, default: str = "5") -> Decimal:
+    if raw is None or not str(raw).strip():
+        return Decimal(default) / Decimal(100)
+    return _money(raw) / Decimal(100)
 
 
 def _months_between(a: date, b: date) -> int:
@@ -52,7 +59,12 @@ def list_goals(
     for g in goals:
         required = None
         if g.target_date and g.remaining > 0:
-            required = g.remaining / _months_between(today, g.target_date)
+            required = required_monthly_savings(
+                target_amount=g.target_amount,
+                current_amount=g.current_amount,
+                annual_rate=g.expected_annual_return,
+                months=_months_between(today, g.target_date),
+            )
         view.append({"g": g, "required": required})
     editing = (
         db.get(Goal, edit) if edit else None
@@ -95,6 +107,7 @@ async def create_goal(
     goal.label = label[:100]
     goal.target_amount = _money(f.get("target_amount"))
     goal.current_amount = _money(f.get("current_amount"))
+    goal.expected_annual_return = _pct(f.get("expected_annual_return"))
     goal.target_date = date.fromisoformat(td) if td else None
     try:
         goal.priority = int(f.get("priority") or 0)
