@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 type MonthLine = {
   id: number;
@@ -51,6 +51,17 @@ function EditableBreakdownPanel({
   onLineDelete: (id: number) => void;
   onLineAdd: () => void;
 }) {
+  const nameRefs = useRef<Map<number, HTMLInputElement>>(new Map());
+  const prevLengthRef = useRef(lines.length);
+
+  useEffect(() => {
+    if (lines.length > prevLengthRef.current) {
+      const lastLine = lines[lines.length - 1];
+      if (lastLine) nameRefs.current.get(lastLine.id)?.focus();
+    }
+    prevLengthRef.current = lines.length;
+  }, [lines]);
+
   const sum = lines.reduce((acc, line) => acc + line.amount, 0);
   const uncategorized = Math.max(0, total - sum);
   const over = sum > total;
@@ -98,6 +109,10 @@ function EditableBreakdownPanel({
                 className="cat-input"
                 value={line.name}
                 placeholder="分類名稱"
+                ref={(el) => {
+                  if (el) nameRefs.current.set(line.id, el);
+                  else nameRefs.current.delete(line.id);
+                }}
                 onChange={(event) => onLineChange({ ...line, name: event.target.value })}
               />
             </div>
@@ -108,6 +123,12 @@ function EditableBreakdownPanel({
                 value={Math.round(line.amount).toLocaleString("en-US")}
                 inputMode="numeric"
                 onChange={(event) => onLineChange({ ...line, amount: parseNumber(event.target.value) })}
+                onKeyDown={(event) => {
+                  if (event.key === "Tab" && !event.shiftKey && line === lines[lines.length - 1]) {
+                    event.preventDefault();
+                    onLineAdd();
+                  }
+                }}
               />
             </div>
             <div className="cat-edit-act">

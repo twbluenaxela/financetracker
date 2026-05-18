@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import type { User } from "@prisma/client";
+import type { SessionUser } from "@/components/app-shell";
 import { useTransition } from "react";
 
 const items = [
@@ -55,14 +55,14 @@ export function Sidebar({
   user,
   memberCount,
 }: {
-  user: User;
+  user: SessionUser;
   memberCount: number;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const active = activeFromPath(pathname);
-  const display = userDisplay(user.email);
+  const display = userDisplay(user.email ?? user.uid);
   const initial = display.slice(0, 1).toUpperCase();
 
   async function logout() {
@@ -133,7 +133,7 @@ export function Sidebar({
           <div className="avatar">{initial}</div>
           <div className="user-info">
             <div className="user-name">{display}</div>
-            <div className="user-email">{user.email}</div>
+            <div className="user-email">{user.email ?? user.uid}</div>
           </div>
           <button className="icon-btn" type="button" aria-label="登出" title="登出" onClick={logout} disabled={isPending}>
             <svg
