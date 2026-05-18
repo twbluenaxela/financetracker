@@ -14,6 +14,33 @@
   </p>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
+  {% if summary %}
+    <h3>本月組成（含未分類）</h3>
+    {% if summary.expense_over_entered %}
+      <p class="error">分類金額已超過月支出，請檢查。</p>
+    {% endif %}
+    <table style="width:100%; border-collapse:collapse; margin-bottom:1.5rem;">
+      <tbody>
+        {% for row in summary.expense_breakdown %}
+          <tr style="border-bottom:1px solid #333;">
+            <td style="color:{{ '#777' if row.name == '未分類' else 'inherit' }};">
+              支出 · {{ row.name }}
+            </td>
+            <td style="text-align:right;">${{ "{:,.0f}".format(row.amount) }}</td>
+          </tr>
+        {% endfor %}
+        {% for row in summary.income_breakdown %}
+          <tr style="border-bottom:1px solid #333;">
+            <td style="color:{{ '#777' if row.name == '未分類' else 'inherit' }};">
+              收入 · {{ row.name }}
+            </td>
+            <td style="text-align:right;">${{ "{:,.0f}".format(row.amount) }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
   <form method="post" action="/months">
     <label>年
       <input type="number" name="year" min="2000" max="2100"
