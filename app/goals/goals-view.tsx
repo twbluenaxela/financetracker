@@ -1025,6 +1025,8 @@ function RoboAdvisorModal({ goals, surplus, onClose }: { goals: GoalView[]; surp
   const [risk, setRisk] = useState<RiskKey>("moderate");
   const [autoPilot, setAutoPilot] = useState(true);
   const [selectedGoalId, setSelectedGoalId] = useState<number | null>(goals[0]?.id ?? null);
+  const [model, setModel] = useState("gemini-2.0-flash-preview");
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: "advisor", text: "嗨，我可以幫你說明任何一個目標的配置理由、比較不同風險組合，或估算如果提高某個目標的月配置會提前多久達標。試著下面的問題或自由提問。" },
   ]);
@@ -1105,11 +1107,15 @@ function RoboAdvisorModal({ goals, surplus, onClose }: { goals: GoalView[]; surp
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ system, user: `<context>${JSON.stringify(ctx)}</context>\n\n問題：${userText}`, model: "gemini-2.5-flash" }),
+      body: JSON.stringify({ system, user: `<context>${JSON.stringify(ctx)}</context>\n\n問題：${userText}`, model }),
     });
-    if (!res.ok) throw new Error("advisor_error");
-    return (await res.json()).text as string;
-  }, [surplus, risk, recs]);
+    const json = await res.json();
+    if (!res.ok) {
+      if (json.error === "api_key_invalid") throw new Error("api_key_invalid");
+      throw new Error("advisor_error");
+    }
+    return json.text as string;
+  }, [surplus, risk, model, recs]);
 
   async function send(text?: string) {
     const t = (text ?? input).trim();
@@ -1120,8 +1126,13 @@ function RoboAdvisorModal({ goals, surplus, onClose }: { goals: GoalView[]; surp
     try {
       const reply = await askAdvisor(t);
       setMessages((m) => [...m, { role: "advisor", text: reply }]);
-    } catch {
-      setMessages((m) => [...m, { role: "advisor", text: "（顧問暫時無法回覆，請稍後再試）", error: true }]);
+    } catch (err) {
+      const isKeyError = err instanceof Error && err.message === "api_key_invalid";
+      setMessages((m) => [...m, {
+        role: "advisor",
+        text: isKeyError ? "API 金鑰已失效或遭洩漏，請在後台更換 GEMINI_API_KEY 後再試。" : "（顧問暫時無法回覆，請稍後再試）",
+        error: true,
+      }]);
     } finally {
       setBusy(false);
     }
@@ -1130,6 +1141,19 @@ function RoboAdvisorModal({ goals, surplus, onClose }: { goals: GoalView[]; surp
   useEffect(() => {
     if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
   }, [messages, busy]);
+
+  useEffect(() => {
+    fetch("/api/chat/models")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.models?.length) {
+          setAvailableModels(data.models);
+          if (!data.models.includes(model)) setModel(data.models[0]);
+        }
+      })
+      .catch(() => {/* keep static fallback */});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -1318,10 +1342,29 @@ function RoboAdvisorModal({ goals, surplus, onClose }: { goals: GoalView[]; surp
               <div className="card-title">問顧問</div>
               <div className="muted ff-label-sub">針對你的目標與配置自由提問 · 顧問會引用上方數字回答</div>
             </div>
-            <span className="robo-chat-engine" title="顧問模型">
+            <label className="robo-chat-engine" title="顧問模型">
               <span className="robo-chat-engine-dot"></span>
-              gemini-2.5-flash
-            </span>
+              <select
+                className="robo-chat-model-select"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+              >
+                {(availableModels.length ? availableModels : [
+                  "gemini-2.0-flash-preview",
+                  "gemini-2.5-flash-preview-05-20",
+                  "gemini-2.5-flash",
+                  "gemini-2.5-pro-preview-06-05",
+                  "gemini-2.5-pro",
+                  "gemini-2.0-flash",
+                  "gemini-2.0-flash-lite",
+                  "gemini-1.5-flash",
+                  "gemini-1.5-flash-8b",
+                  "gemini-1.5-pro",
+                ]).map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </label>
           </header>
 
           <div className="robo-chat-thread" ref={threadRef}>

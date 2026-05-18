@@ -7,7 +7,7 @@ import { getSessionUser } from "@/lib/auth";
 const schema = z.object({
   system: z.string().min(1).max(2000),
   user: z.string().min(1).max(8000),
-  model: z.string().default("gemini-2.5-flash"),
+  model: z.string().min(1).max(100).default("gemini-2.0-flash-preview"),
 });
 
 export async function POST(request: Request) {
@@ -30,11 +30,19 @@ export async function POST(request: Request) {
   const ai = new GoogleGenAI({ apiKey });
   const { system, user: userText, model } = parsed.data;
 
-  const response = await ai.models.generateContent({
-    model,
-    contents: [{ role: "user", parts: [{ text: system + "\n\n" + userText }] }],
-  });
-
-  const text = response.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  return NextResponse.json({ text });
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: "user", parts: [{ text: system + "\n\n" + userText }] }],
+    });
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    return NextResponse.json({ text });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const isKeyError = msg.includes("leaked") || msg.includes("API key") || msg.includes("PERMISSION_DENIED");
+    return NextResponse.json(
+      { error: isKeyError ? "api_key_invalid" : "generation_failed", detail: msg },
+      { status: isKeyError ? 403 : 502 },
+    );
+  }
 }
