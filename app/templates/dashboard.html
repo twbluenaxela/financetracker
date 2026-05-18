@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · Finance Tracker{% endblock %}
+{% block body %}
+  <header>
+    <h1>Dashboard</h1>
+    <form method="post" action="/logout">
+      <button type="submit">Sign out</button>
+    </form>
+  </header>
+  <p>Signed in as <strong>{{ user.email }}</strong>.</p>
+  <p class="muted">
+    Phase 1 scaffold. Next phases: transaction import, cash-flow analysis,
+    goals, and the savings-plan engine.
+  </p>
+{% endblock %}

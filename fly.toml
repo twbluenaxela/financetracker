@@ -1,0 +1,30 @@
+# Rename the app and pick a region with `fly launch` (or edit here).
+app = "financetracker"
+primary_region = "nrt"
+
+[build]
+
+# Runs once per deploy, before the new version goes live. This applies
+# pending Alembic migrations against Neon automatically.
+[deploy]
+  release_command = "alembic upgrade head"
+
+[env]
+  SECURE_COOKIES = "true"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    path = "/healthz"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
