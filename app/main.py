@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import get_settings
@@ -13,6 +16,12 @@ app.add_middleware(
     secret_key=settings.session_secret,
     https_only=settings.secure_cookies,
     same_site="lax",
+)
+
+app.mount(
+    "/static",
+    StaticFiles(directory=str(Path(__file__).parent / "static")),
+    name="static",
 )
 
 app.include_router(auth.router)

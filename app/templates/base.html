@@ -4,21 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}家庭理財{% endblock %}</title>
-    <style>
-      :root { color-scheme: light dark; }
-      body {
-        font-family: system-ui, sans-serif;
-        max-width: 720px;
-        margin: 3rem auto;
-        padding: 0 1rem;
-        line-height: 1.5;
-      }
-      header { display: flex; justify-content: space-between; align-items: center; }
-      input { padding: 0.5rem; width: 100%; box-sizing: border-box; margin: 0.25rem 0 1rem; }
-      button { padding: 0.5rem 1rem; cursor: pointer; }
-      .error { color: #c0392b; }
-      .muted { color: #777; }
-    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     {% block body %}{% endblock %}

@@ -1,40 +1,286 @@
 {% extends "base.html" %}
 {% block title %}總覽 · 家庭理財{% endblock %}
 {% block body %}
-  <header>
-    <h1>總覽</h1>
-    <form method="post" action="/logout">
-      <button type="submit">登出</button>
-    </form>
-  </header>
-  <p>已登入：<strong>{{ user.email }}</strong> · <a href="/months">每月收支</a></p>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 32 32" width="22" height="22">
+          <path d="M6 22 L13 12 L18 18 L26 8" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="26" cy="8" r="2.5" fill="currentColor"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">家庭理財</div>
+        <div class="brand-sub">Shared Ledger</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <a class="nav-item active" href="/">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 12 3l9 8M5 10v10h14V10"/></svg>
+        <span>總覽</span>
+      </a>
+      <a class="nav-item" href="/months">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM4 9h16M8 5v14"/></svg>
+        <span>每月收支</span>
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M12 7l4 5-4 5-4-5z"/></svg>
+        <span>理財目標</span>
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m0 0 4-4m-4 4-4-4M4 20h16"/></svg>
+        <span>匯入快速記帳</span>
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+        <span>設定</span>
+      </a>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="ledger-card">
+        <div class="ledger-card-row">
+          <span class="muted">共享帳本</span>
+          <span class="dot dot-live"></span>
+        </div>
+        <div class="ledger-card-title">家庭理財</div>
+        <div class="ledger-card-meta">2 位成員 · TWD</div>
+      </div>
+      <div class="user-pill">
+        <div class="avatar">{{ user_initial }}</div>
+        <div class="user-info">
+          <div class="user-name">{{ user_display }}</div>
+          <div class="user-email">{{ user.email }}</div>
+        </div>
+        <form method="post" action="/logout">
+          <button class="icon-btn" title="登出" aria-label="登出" type="submit">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 12H4M4 12l4-4M4 12l4 4M10 4h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-8"/></svg>
+          </button>
+        </form>
+      </div>
+    </div>
+  </aside>
 
-  {% if not recent %}
-    <p class="muted">
-      尚無資料。請從 快速記帳 共享帳本的月檢視畫面
-      <a href="/months/new">新增月份</a>，即可開始追蹤現金流。
-    </p>
-  {% else %}
-    <h3>近期月份</h3>
-    <table style="width:100%; border-collapse:collapse;">
-      <thead>
-        <tr style="text-align:left; border-bottom:1px solid #888;">
-          <th>月份</th><th>收入</th><th>支出</th><th>結餘</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for s in recent %}
-          <tr style="border-bottom:1px solid #333;">
-            <td><a href="/months/{{ s.year }}/{{ s.month }}/edit">{{ s.year }}-{{ "%02d"|format(s.month) }}</a></td>
-            <td>${{ "{:,.0f}".format(s.total_income) }}</td>
-            <td>${{ "{:,.0f}".format(s.total_expense) }}</td>
-            <td style="color:{{ '#27ae60' if s.surplus >= 0 else '#c0392b' }};">
-              ${{ "{:,.0f}".format(s.surplus) }}
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <p class="muted">接下來：理財目標（短期 / 中期 / 長期）與依結餘推算的儲蓄計畫引擎。</p>
-  {% endif %}
+  <main class="main">
+    {% if not has_data %}
+      <header class="topbar">
+        <div>
+          <div class="crumb">總覽 · Overview</div>
+          <h1 class="page-title">家庭理財</h1>
+        </div>
+        <div class="topbar-actions">
+          <a class="btn btn-primary" href="/months/new">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            新增月份
+          </a>
+        </div>
+      </header>
+      <div class="empty-state">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM4 9h16M8 5v14"/></svg>
+        </div>
+        <h2>尚無資料</h2>
+        <p class="muted">從 快速記帳 共享帳本的月檢視畫面，輸入該月的月收入與月支出即可開始追蹤現金流。</p>
+        <p style="margin-top:18px;"><a class="btn btn-primary" href="/months/new">新增第一個月份</a></p>
+      </div>
+    {% else %}
+      <header class="topbar">
+        <div>
+          <div class="crumb">總覽 · Overview</div>
+          <h1 class="page-title">
+            {{ year }} 年 {{ month_cn }}
+            <span class="page-title-sub"> · 第 {{ week_no }} 週</span>
+          </h1>
+        </div>
+        <div class="topbar-actions">
+          <div class="search">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5" stroke-linecap="round"/></svg>
+            <input placeholder="搜尋分類、月份、備註…" />
+            <kbd>⌘K</kbd>
+          </div>
+          <a class="btn btn-primary" href="/months/new">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            新增月份
+          </a>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div class="hero-main">
+          <div class="hero-label"><span class="dot dot-accent"></span>本月結餘</div>
+          <div class="hero-figure {{ 'neg' if surplus_neg else 'pos' }}">
+            <span class="currency">NT$</span>
+            <span class="amount">{{ surplus|money_plain }}</span>
+          </div>
+          <div class="hero-meta">
+            <div class="chip {{ 'chip-pos' if surplus_delta_pos else 'chip-neg' }}">
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ 'm6 14 6-6 6 6' if surplus_delta_pos else 'm6 10 6 6 6-6' }}"/></svg>
+              {% if surplus_delta_pos %}+{% endif %}{{ surplus_delta|money }} 較上月
+            </div>
+            <div class="chip chip-muted">儲蓄率 <strong>{% if savings_rate is not none %}{{ "%.1f"|format(savings_rate) }}%{% else %}—{% endif %}</strong></div>
+            <div class="chip chip-muted">日均支出 <strong>{{ daily_avg|money }}</strong></div>
+          </div>
+        </div>
+        <div class="hero-side">
+          <div class="hero-stat">
+            <div class="stat-row">
+              <span class="stat-label"><span class="bar bar-income"></span>收入</span>
+              {% if income_delta is not none %}
+              <span class="stat-delta {{ 'pos' if income_delta >= 0 else 'neg' }}">{{ '+' if income_delta >= 0 else '' }}{{ "%.1f"|format(income_delta) }}%</span>
+              {% endif %}
+            </div>
+            <div class="stat-amount num">{{ income|money }}</div>
+            <div class="stat-foot muted">含薪資、利息、其他 共 {{ income_lines_count }} 項</div>
+          </div>
+          <div class="hero-stat">
+            <div class="stat-row">
+              <span class="stat-label"><span class="bar bar-expense"></span>支出</span>
+              {% if expense_delta is not none %}
+              <span class="stat-delta {{ 'pos' if expense_delta <= 0 else 'neg' }}">{{ '+' if expense_delta >= 0 else '' }}{{ "%.1f"|format(expense_delta) }}%</span>
+              {% endif %}
+            </div>
+            <div class="stat-amount num">{{ expense|money }}</div>
+            <div class="stat-foot muted">{{ exp_cat_count }} 個分類 · {{ uncat_count }} 個未分類</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="grid-2">
+        <div class="card chart-card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">12 個月現金流</div>
+              <div class="card-sub muted">收入 <span class="bar bar-income"></span> 與支出 <span class="bar bar-expense"></span></div>
+            </div>
+            <div class="seg"><button class="seg-btn active">12M</button></div>
+          </div>
+          <div class="chart-wrap">
+            <div class="chart-axis">
+              <span>{{ chart_max_lbl }}</span>
+              <span>{{ chart_half_lbl }}</span>
+              <span>0</span>
+              <span>{{ chart_half_lbl }}</span>
+              <span>{{ chart_max_lbl }}</span>
+            </div>
+            <div class="chart-area">
+              <svg viewBox="0 0 100 220" preserveAspectRatio="none" class="chart-svg">
+                <line class="chart-grid" x1="0" x2="100" y1="55" y2="55"/>
+                <line class="chart-mid" x1="0" x2="100" y1="110" y2="110"/>
+                <line class="chart-grid" x1="0" x2="100" y1="165" y2="165"/>
+                {% for b in bars %}
+                <g class="bar-group {{ 'active' if b.active else '' }}">
+                  <rect class="hit" x="{{ b.hitx }}" y="0" width="{{ b.hitw }}" height="220"/>
+                  <rect class="bar-income-rect" x="{{ b.ix }}" y="{{ b.iy }}" width="{{ b.iw }}" height="{{ b.ih }}" rx="1.2"/>
+                  <rect class="bar-expense-rect" x="{{ b.ex }}" y="{{ b.ey }}" width="{{ b.ew }}" height="{{ b.eh }}" rx="1.2"/>
+                  {% if b.active %}<circle class="active-marker" cx="{{ b.cx }}" cy="110" r="1.6"/>{% endif %}
+                </g>
+                {% endfor %}
+              </svg>
+              <div class="chart-labels">
+                {% for l in labels %}
+                <span class="chart-lbl {{ 'active' if l.active else '' }}" style="width:{{ l.w }}%">{{ l.text }}</span>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card cat-card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">支出分類</div>
+              <div class="card-sub muted">共 {{ cat_count }} 個分類 · 合計 {{ cat_total|money }}</div>
+            </div>
+            <a class="link-btn" href="/months">查看全部 →</a>
+          </div>
+          <div class="cat-list">
+            {% for r in cat_rows %}
+            <div class="cat-row {{ 'is-uncat' if r.is_uncat else '' }}">
+              <div class="cat-row-top">
+                <div class="cat-name">
+                  <span class="cat-swatch" style="--i: {{ r.i }}"></span>
+                  {{ r.name }}
+                  {% if r.is_uncat %}<span class="cat-flag">未指派</span>{% endif %}
+                </div>
+                <div class="cat-amt">
+                  <span class="amt num">{{ r.amount|money }}</span>
+                  <span class="pct muted">{{ "%.1f"|format(r.pct) }}%</span>
+                </div>
+              </div>
+              <div class="cat-track">
+                <div class="cat-fill" style="width:{{ '%.1f'|format(r.pct) }}%; --i: {{ r.i }}"></div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">理財目標</div>
+            <div class="card-sub muted">短期 / 中期 / 長期 · 即將推出</div>
+          </div>
+        </div>
+        <p class="muted" style="margin:0;">尚未設定理財目標。下一階段將依本月結餘自動配置短/中/長期儲蓄計畫。</p>
+      </div>
+
+      <div class="card recent-card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">近期月份</div>
+            <div class="card-sub muted">最近 {{ recent|length }} 個月</div>
+          </div>
+          <a class="link-btn" href="/months">完整明細 →</a>
+        </div>
+        <div class="table-wrap">
+          <table class="recent-table">
+            <thead>
+              <tr>
+                <th>月份</th>
+                <th class="num">收入</th>
+                <th class="num">支出</th>
+                <th class="num">結餘</th>
+                <th class="num">儲蓄率</th>
+                <th>趨勢</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in recent %}
+              <tr class="{{ 'current' if m.is_current else '' }}">
+                <td>
+                  <div class="mo-cell">
+                    <strong>{{ m.label }}</strong>
+                    <span class="muted">{{ m.month_cn }}</span>
+                    {% if m.is_current %}<span class="now-pill">目前</span>{% endif %}
+                  </div>
+                </td>
+                <td class="num">{{ m.income|money }}</td>
+                <td class="num">{{ m.expense|money }}</td>
+                <td class="num {{ 'neg' if m.surplus < 0 else 'pos' }}">{{ m.surplus|money }}</td>
+                <td class="num muted">{% if m.rate is not none %}{{ "%.1f"|format(m.rate) }}%{% else %}—{% endif %}</td>
+                <td>
+                  <svg viewBox="0 0 40 16" width="48" height="16" class="mini-spark">
+                    <rect x="2" y="{{ 16 - m.spark_ih }}" width="6" height="{{ m.spark_ih }}" rx="1" class="bar-income-rect"/>
+                    <rect x="12" y="{{ 16 - m.spark_eh }}" width="6" height="{{ m.spark_eh }}" rx="1" class="bar-expense-rect"/>
+                  </svg>
+                </td>
+                <td class="num">
+                  <a class="icon-btn ghost" href="/months/{{ m.year }}/{{ m.month }}/edit" aria-label="編輯">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m4 20 4-1 11-11-3-3L5 16zM14 6l3 3"/></svg>
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <footer class="page-foot muted">家庭理財 · 共享帳本 · 資料更新於 {{ generated_at }}</footer>
+    {% endif %}
+  </main>
+</div>
 {% endblock %}
