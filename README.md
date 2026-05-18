@@ -14,10 +14,14 @@ Alembic migrations, deployed on Fly.io.
 - [x] Phase 1 — scaffold: app, Postgres, migrations, two-user auth, Fly config
 - [x] Phase 2 — monthly-summary entry (income/expense + optional categories),
       manually keyed from 快速記帳 screenshots (CSV export is paywalled)
-- [ ] Phase 3 — cash-flow dashboard (trends, category breakdown, charts)
-- [ ] Phase 4 — goals (短期 / 中期 / 長期)
-- [ ] Phase 5 — savings-plan engine (projections + gap analysis)
-- [ ] Phase 6 — polish (charts, monthly review)
+- [x] Phase 3 — dark dashboard (12-month cashflow chart, 支出分類, 近期月份),
+      self-hosted fonts (no CDN)
+- [x] Phase 4 — goals (短期 / 中期 / 長期) with auto-allocation from
+      trailing-average surplus
+- [x] Phase 5 — investment engine: adjustable 台股/美股/債券 portfolio,
+      blended return, Bogleheads heuristic, compound projection (lump +
+      periodic) matching the Mr. Market spreadsheet exactly
+- [ ] Phase 6 — polish (interactive chart, monthly review, fine-tuning)
 
 There is **no public signup**. The only accounts are the two you create
 with `scripts/seed_users.py`.
