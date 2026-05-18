@@ -1,67 +1,71 @@
-# Next.js Migration Scaffold
+# financetracker
 
-This folder is the starting point for replacing the FastAPI + Jinja app
-with a full Next.js app.
+Family finance tracker for tracking monthly cash flow, savings goals, and investment planning. UI is in Traditional Chinese (zh-TW). Currency is TWD.
 
-## Why this shape
+Live: **https://financetrackertw.fly.dev**
 
-- `app/` replaces server-rendered Jinja routes
-- `prisma/` replaces SQLAlchemy models for the new stack
-- `app/api/` replaces FastAPI route handlers
-- `lib/auth.ts` verifies the **existing Argon2 password hashes**, so you
-  do not need to reset users during migration
+## Stack
 
-## Current migration status
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 15 (App Router, RSC, TypeScript strict) |
+| Auth | Firebase Auth — email/password + Google sign-in |
+| Database | PostgreSQL on Neon (serverless) |
+| ORM | Prisma 5 |
+| Deployment | Fly.io (Tokyo / nrt region) |
+| Validation | Zod |
+| Styling | Custom CSS, no component library |
 
-- Prisma schema mirrors the current Postgres tables
-- Dashboard, months, goals, and invest pages exist as server-component
-  placeholders reading real DB data
-- Login/logout route handlers exist
-- Shared shell exists, but it is intentionally minimal
-
-## Recommended migration order
-
-1. Install dependencies:
+## Local development
 
 ```bash
-cd web
 npm install
+npm run dev       # http://localhost:3000
 ```
 
-2. Copy env:
+## Environment variables
+
+Copy `.env.example` to `.env.local`:
+
+```
+DATABASE_URL                       # Neon PostgreSQL connection string
+NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+FIREBASE_ADMIN_PROJECT_ID
+FIREBASE_ADMIN_CLIENT_EMAIL
+FIREBASE_ADMIN_PRIVATE_KEY         # paste with \n literals, not real newlines
+```
+
+Both local and production point to the same Neon database — edits sync in real time.
+
+## Database
+
+The database schema is managed via `prisma db push` (no migration files). To sync schema changes:
 
 ```bash
-cp .env.example .env.local
+npx prisma db push        # push schema to Neon
+npx prisma studio         # browse data in browser
+npx prisma generate       # regenerate client after schema change
 ```
 
-3. Generate Prisma client:
+## Deployment
+
+Deploys to Fly.io via Docker. The release command runs `prisma db push` before each deploy to keep the schema in sync.
 
 ```bash
-npm run prisma:generate
+fly deploy
 ```
 
-4. Start the app:
+Fly secrets required (set with `fly secrets set -a financetrackertw`):
+- All env vars above except the `NEXT_PUBLIC_*` ones are injected as secrets
+- `NEXT_PUBLIC_*` vars are baked into the image at build time via Docker build args (set them as Fly secrets too — Next.js reads them at build time from the environment)
 
-```bash
-npm run dev
-```
+## Firebase setup
 
-## Cutover strategy
+Firebase project: `financetracker-c0cea`
 
-1. Keep FastAPI live while you rebuild the UI in Next.
-2. Point Next directly at the same Postgres database first.
-3. Recreate each page in this order:
-   - `/login`
-   - `/`
-   - `/months`
-   - `/months/new` and edit
-   - `/goals`
-   - `/invest`
-4. After parity, replace FastAPI mutations with Next route handlers.
-5. Only then retire the Python web layer.
-
-## Important note
-
-Do not try to migrate both the UI and the financial engine at the same
-time. First move rendering and forms. Then move the advanced
-robo-advisor/data pipeline.
+In Firebase Console → Authentication → Sign-in method, enable:
+- Email/Password
+- Google

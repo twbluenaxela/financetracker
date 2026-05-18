@@ -2,12 +2,15 @@
 
 Family finance tracker — monthly cash flow, savings goals, investment planning. UI is in Traditional Chinese (zh-TW). Currency is TWD.
 
+Live: https://financetrackertw.fly.dev
+
 ## Tech stack
 
 - **Next.js 15** (App Router, React Server Components, TypeScript strict)
 - **Firebase Auth** — email/password + Google; session cookies via Admin SDK
-- **Prisma + PostgreSQL** — all financial data
+- **Prisma 5 + Neon PostgreSQL** — all financial data (serverless Postgres)
 - **Zod** — API input validation
+- **Fly.io** — deployment (Tokyo / nrt region, shared-cpu-1x, 512mb)
 - No UI component library — custom CSS with design tokens
 
 ## Running locally
@@ -18,29 +21,44 @@ npm run build     # production build
 npm run start     # serve production build
 ```
 
+Both local and production point to the same Neon database — changes sync in real time.
+
 ## Environment variables
 
 Copy `.env.example` to `.env.local` and fill in:
 
 ```
-DATABASE_URL                      # PostgreSQL connection string
+DATABASE_URL                      # Neon PostgreSQL connection string (postgresql://...)
 NEXT_PUBLIC_FIREBASE_API_KEY      # Firebase project web API key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN  # <project-id>.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID   # Firebase project ID
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN  # financetracker-c0cea.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID   # financetracker-c0cea
 NEXT_PUBLIC_FIREBASE_APP_ID       # Firebase web app ID
-FIREBASE_ADMIN_PROJECT_ID         # same project ID (server-only)
-FIREBASE_ADMIN_CLIENT_EMAIL       # service account client_email
-FIREBASE_ADMIN_PRIVATE_KEY        # service account private_key (with \n literals)
+FIREBASE_ADMIN_PROJECT_ID         # financetracker-c0cea (server-only)
+FIREBASE_ADMIN_CLIENT_EMAIL       # service account client_email (server-only)
+FIREBASE_ADMIN_PRIVATE_KEY        # service account private_key with \n literals (server-only)
 ```
 
 Firebase console: enable **Email/Password** and **Google** under Authentication → Sign-in method.
 
 ## Database
 
+Schema is managed with `prisma db push` — there are no migration files.
+
 ```bash
-npx prisma migrate dev    # apply migrations
+npx prisma db push        # sync schema changes to Neon
 npx prisma studio         # browse data in browser
 npx prisma generate       # regenerate client after schema change
+```
+
+After any schema change: run `prisma db push`, commit the updated `schema.prisma`, and `fly deploy`. The release command runs `prisma db push` automatically on each deploy.
+
+## Deployment
+
+```bash
+fly deploy                # build, push image, run release command, deploy
+fly logs -a financetrackertw    # tail live logs
+fly secrets list -a financetrackertw   # check secrets
+fly secrets set KEY=value -a financetrackertw  # set a secret
 ```
 
 ## Project structure
@@ -79,7 +97,10 @@ lib/
   invest.ts               # blended return, growth schedules, allocation recommender
 
 prisma/
-  schema.prisma           # DB schema
+  schema.prisma           # DB schema (push-based, no migration files)
+
+Dockerfile                # multi-stage Node 22 Alpine build for Fly.io
+fly.toml                  # Fly.io config — app: financetrackertw, region: nrt
 ```
 
 ## Key conventions
@@ -93,3 +114,9 @@ prisma/
 - **`@/`** path alias maps to project root (e.g. `@/lib/auth`).
 - **CSS classes** are hand-written in `globals.css`. Design tokens are CSS custom properties (`--bg`, `--accent`, `--text`, etc.). No Tailwind.
 - **InvestmentPlan is a singleton** — always `id: 1`. Use upsert.
+- **No migration files** — schema changes go through `prisma db push`. Do not run `prisma migrate dev`.
+
+## Planned features
+
+- **Households with invites** — multi-user support where users belong to a shared household. Invite links let others join. Default permission is view-only; owner can grant edit access. Not yet built — will require `Household`, `HouseholdMember`, `HouseholdInvite` models and `householdId` on all financial tables.
+- **Robo-advisor** — Gemini API integration for AI financial advice. Reference implementation in `reference/robo-advisor/`. `GEMINI_API_KEY` is already in env, not yet wired up.
