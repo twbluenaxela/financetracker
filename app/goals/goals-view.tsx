@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 type GoalView = {
@@ -914,6 +914,483 @@ function ScenarioModal({
   );
 }
 
+// ===== Robo-Advisor ==========================================================
+
+const ASSETS: Record<string, { id: string; name: string; ticker: string; ret: number; color: string }> = {
+  cash:    { id: "cash",    name: "高利活存",       ticker: "HYSA",       ret: 0.016, color: "oklch(0.80 0.09 155)" },
+  bond:    { id: "bond",    name: "投資級債券 ETF", ticker: "00679B/BND", ret: 0.038, color: "oklch(0.78 0.09 235)" },
+  twStock: { id: "twStock", name: "台股市值型 ETF", ticker: "0050",       ret: 0.075, color: "oklch(0.78 0.11 65)"  },
+  usStock: { id: "usStock", name: "美股全市場 ETF", ticker: "VT",         ret: 0.082, color: "oklch(0.74 0.13 35)"  },
+  reit:    { id: "reit",    name: "REITs",          ticker: "VNQ",        ret: 0.055, color: "oklch(0.74 0.10 350)" },
+};
+const ASSET_ORDER = ["cash", "bond", "twStock", "usStock", "reit"];
+
+type AssetMix = Partial<Record<string, number>>;
+type RiskKey = "conservative" | "moderate" | "aggressive";
+
+const RECIPES: Record<string, Record<RiskKey, AssetMix>> = {
+  "短期": {
+    conservative: { cash: 100 },
+    moderate:     { cash: 70, bond: 30 },
+    aggressive:   { cash: 50, bond: 50 },
+  },
+  "中期": {
+    conservative: { cash: 30, bond: 50, twStock: 15, usStock: 5 },
+    moderate:     { cash: 15, bond: 35, twStock: 25, usStock: 25 },
+    aggressive:   { cash: 5,  bond: 20, twStock: 35, usStock: 35, reit: 5 },
+  },
+  "長期": {
+    conservative: { cash: 10, bond: 35, twStock: 25, usStock: 25, reit: 5 },
+    moderate:     { cash: 5,  bond: 15, twStock: 30, usStock: 40, reit: 10 },
+    aggressive:   { bond: 5,  twStock: 35, usStock: 45, reit: 15 },
+  },
+};
+
+const RISK_META: Record<RiskKey, { label: string; sub: string; color: string }> = {
+  conservative: { label: "保守", sub: "重現金 · 低波動",    color: "var(--pos)"  },
+  moderate:     { label: "穩健", sub: "均衡配置 · 經典 6/4", color: "var(--accent)" },
+  aggressive:   { label: "積極", sub: "重股票 · 長期成長",  color: "var(--warn)" },
+};
+
+function blendedReturn(mix: AssetMix): number {
+  let sum = 0, w = 0;
+  for (const k in mix) { sum += ((mix[k] ?? 0) / 100) * ASSETS[k].ret; w += (mix[k] ?? 0) / 100; }
+  return w > 0 ? sum / w : 0;
+}
+
+function recomputeEta(current: number, target: number, monthly: number, annualRate: number): number {
+  if (monthly <= 0) return 999;
+  const r = annualRate / 12;
+  if (r <= 0.0005) return Math.ceil((target - current) / monthly);
+  const ratio = (target * r + monthly) / (current * r + monthly);
+  if (ratio <= 1) return 0;
+  return Math.max(1, Math.ceil(Math.log(ratio) / Math.log(1 + r)));
+}
+
+function MixBar({ mix, height = 8 }: { mix: AssetMix; height?: number }) {
+  const order = ASSET_ORDER.filter((k) => mix[k]);
+  return (
+    <div className="robo-mix-bar" style={{ height }}>
+      {order.map((k, i) => (
+        <span
+          key={k}
+          className="robo-mix-seg"
+          style={{
+            width: `${mix[k]}%`,
+            background: ASSETS[k].color,
+            borderTopLeftRadius:     i === 0 ? 99 : 0,
+            borderBottomLeftRadius:  i === 0 ? 99 : 0,
+            borderTopRightRadius:    i === order.length - 1 ? 99 : 0,
+            borderBottomRightRadius: i === order.length - 1 ? 99 : 0,
+          }}
+          title={`${ASSETS[k].name} ${mix[k]}%`}
+        />
+      ))}
+    </div>
+  );
+}
+
+function RoboBanner({ idleAmount, projectedReturn, onOpen }: { idleAmount: number; projectedReturn: number; onOpen: () => void }) {
+  return (
+    <button className="robo-banner" onClick={onOpen} type="button">
+      <span className="robo-banner-mark">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="4" y="7" width="16" height="13" rx="2"/>
+          <path d="M9 12h.01M15 12h.01M9 16h6M12 4v3M8 4h8"/>
+        </svg>
+      </span>
+      <div className="robo-banner-text">
+        <div className="robo-banner-title">
+          智能投資顧問
+          <span className="robo-banner-beta">新功能</span>
+        </div>
+        <div className="robo-banner-sub muted">
+          你已累積 <strong className="num">{fmtCompact(idleAmount)}</strong> 仍多數停在活存 ·
+          啟用顧問可獲得預估年化 <strong className="num pos">{(projectedReturn * 100).toFixed(1)}%</strong> 的配置建議
+        </div>
+      </div>
+      <span className="robo-banner-cta">
+        啟用智能配置
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 12h14M13 5l7 7-7 7"/>
+        </svg>
+      </span>
+    </button>
+  );
+}
+
+type ChatMessage = { role: "advisor" | "user"; text: string; error?: boolean };
+
+function RoboAdvisorModal({ goals, surplus, onClose }: { goals: GoalView[]; surplus: number; onClose: () => void }) {
+  const [risk, setRisk] = useState<RiskKey>("moderate");
+  const [autoPilot, setAutoPilot] = useState(true);
+  const [selectedGoalId, setSelectedGoalId] = useState<number | null>(goals[0]?.id ?? null);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    { role: "advisor", text: "嗨，我可以幫你說明任何一個目標的配置理由、比較不同風險組合，或估算如果提高某個目標的月配置會提前多久達標。試著下面的問題或自由提問。" },
+  ]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const threadRef = useRef<HTMLDivElement>(null);
+
+  const recs = useMemo(() => goals.map((g) => {
+    const mix = RECIPES[g.tier]?.[risk] ?? RECIPES["中期"][risk];
+    const ret = blendedReturn(mix);
+    const newEta = recomputeEta(g.currentAmount, g.targetAmount, g.requiredMonthly, ret);
+    return { ...g, mix, expectedReturn: ret, recommendedEta: newEta, etaDelta: newEta - g.monthsRemaining };
+  }), [goals, risk]);
+
+  const totalIdle = goals.reduce((a, g) => a + g.currentAmount, 0);
+
+  const blendedAll = useMemo(() => {
+    const pooled: Record<string, number> = {};
+    for (const r of recs) {
+      for (const k in r.mix) pooled[k] = (pooled[k] ?? 0) + ((r.mix[k] ?? 0) / 100) * r.currentAmount;
+    }
+    const total = Object.values(pooled).reduce((a, b) => a + b, 0) || 1;
+    const norm: AssetMix = {};
+    for (const k in pooled) norm[k] = Math.round((pooled[k] / total) * 100);
+    const normValues = Object.values(norm) as number[];
+    const sum: number = normValues.reduce((a: number, b: number) => a + b, 0);
+    if (sum !== 100) { if (norm.usStock !== undefined) norm.usStock = (norm.usStock as number) + (100 - sum); else if (norm.cash !== undefined) norm.cash = (norm.cash as number) + (100 - sum); }
+    return { mix: norm, ret: blendedReturn(norm) };
+  }, [recs]);
+
+  const monthlyTotal = goals.reduce((a, g) => a + g.requiredMonthly, 0);
+
+  const actions = useMemo(() => {
+    const byAsset: Record<string, { amount: number; goals: string[] }> = {};
+    for (const r of recs) {
+      for (const k in r.mix) {
+        const amount = Math.round(r.requiredMonthly * (r.mix[k] ?? 0) / 100);
+        if (amount <= 0) continue;
+        if (!byAsset[k]) byAsset[k] = { amount: 0, goals: [] };
+        byAsset[k].amount += amount;
+        byAsset[k].goals.push(r.label);
+      }
+    }
+    return ASSET_ORDER.filter((k) => byAsset[k]).map((k) => ({ asset: ASSETS[k], ...byAsset[k] }));
+  }, [recs]);
+
+  const suggestedPrompts = useMemo(() => {
+    const sorted = [...recs].sort((a, b) => a.monthsRemaining - b.monthsRemaining);
+    const shortest = sorted[0];
+    const longest = sorted[sorted.length - 1];
+    const stretched = [...recs].sort((a, b) => b.monthsRemaining - a.monthsRemaining).find((r) => r.tier !== "長期");
+    return [
+      shortest && `${shortest.label} 還剩 ${shortest.monthsRemaining} 個月，現在該怎麼放？`,
+      longest && `如果改成「積極」風格，${longest.label} 會差多少？`,
+      stretched && `每月多投 NT$3,000 到「${stretched.label}」可以提早多久達標？`,
+      `為什麼短期目標不該碰股票 ETF？`,
+    ].filter(Boolean) as string[];
+  }, [recs]);
+
+  const askAdvisor = useCallback(async (userText: string): Promise<string> => {
+    const ctx = {
+      asOf: new Date().toISOString().slice(0, 10),
+      monthlySurplus: surplus,
+      riskProfile: RISK_META[risk].label,
+      goals: recs.map((r) => ({
+        tier: r.tier, label: r.label,
+        current: r.currentAmount, target: r.targetAmount, monthly: r.requiredMonthly,
+        etaMonths: r.monthsRemaining,
+        recommendedMix: r.mix,
+        recommendedAnnualReturn: +(r.expectedReturn * 100).toFixed(2),
+        recommendedEtaMonths: r.recommendedEta,
+      })),
+    };
+    const system =
+      "你是「家庭理財」App 內建的中文理財顧問。針對使用者的目標與配置給出具體、" +
+      "可執行、簡潔(< 120 字)的回覆。可引用提供的 JSON 上下文中的數字。" +
+      "避免免責聲明套話，必要時最後一行加一句「以上僅供參考」。";
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ system, user: `<context>${JSON.stringify(ctx)}</context>\n\n問題：${userText}`, model: "gemini-2.5-flash" }),
+    });
+    if (!res.ok) throw new Error("advisor_error");
+    return (await res.json()).text as string;
+  }, [surplus, risk, recs]);
+
+  async function send(text?: string) {
+    const t = (text ?? input).trim();
+    if (!t || busy) return;
+    setInput("");
+    setMessages((m) => [...m, { role: "user", text: t }]);
+    setBusy(true);
+    try {
+      const reply = await askAdvisor(t);
+      setMessages((m) => [...m, { role: "advisor", text: reply }]);
+    } catch {
+      setMessages((m) => [...m, { role: "advisor", text: "（顧問暫時無法回覆，請稍後再試）", error: true }]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
+  }, [messages, busy]);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal modal-xl robo-modal" onClick={(e) => e.stopPropagation()}>
+        <header className="modal-head">
+          <div>
+            <div className="crumb">
+              <span className="robo-crumb-tag">
+                <span className="robo-crumb-dot"></span>
+                自動配置
+              </span>
+              智能投資顧問 · Robo-Advisor
+            </div>
+            <h2 className="modal-title">為每個目標推薦合適的投資組合</h2>
+            <div className="modal-sub muted">依目標期間與你的風險偏好，把每月配置自動分配到現金、債券與股票 ETF。</div>
+          </div>
+          <button className="icon-btn" onClick={onClose} aria-label="關閉">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <path d="M6 6l12 12M18 6L6 18"/>
+            </svg>
+          </button>
+        </header>
+
+        {/* Risk picker */}
+        <section className="robo-risk-row">
+          {(Object.entries(RISK_META) as [RiskKey, typeof RISK_META[RiskKey]][]).map(([key, meta]) => {
+            const sampleMix = RECIPES["長期"][key];
+            const sampleRet = blendedReturn(sampleMix);
+            const active = risk === key;
+            return (
+              <button key={key} type="button"
+                className={"robo-risk-card " + (active ? "active" : "")}
+                style={active ? {
+                  borderColor: `color-mix(in oklab, ${meta.color} 50%, var(--border))`,
+                  background: `color-mix(in oklab, ${meta.color} 6%, var(--bg-elev))`,
+                } : {}}
+                onClick={() => setRisk(key)}>
+                <div className="robo-risk-head">
+                  <span className="robo-risk-name" style={{ color: meta.color }}>{meta.label}</span>
+                  {active && (
+                    <span className="robo-risk-check" style={{ background: meta.color }}>
+                      <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M5 12l5 5L20 7"/></svg>
+                    </span>
+                  )}
+                </div>
+                <div className="robo-risk-sub muted">{meta.sub}</div>
+                <div className="robo-risk-ret">
+                  <span className="muted">長期年化</span>
+                  <strong className="num" style={{ color: meta.color }}>{(sampleRet * 100).toFixed(1)}%</strong>
+                </div>
+                <MixBar mix={sampleMix} height={6}/>
+              </button>
+            );
+          })}
+        </section>
+
+        {/* Summary */}
+        <section className="robo-summary">
+          <div className="robo-summary-l">
+            <div className="muted ff-label-sub">合計配置 · {goals.length} 個目標</div>
+            <div className="robo-summary-bar"><MixBar mix={blendedAll.mix} height={12}/></div>
+          </div>
+          <div className="robo-summary-r">
+            <div className="robo-summary-stat">
+              <div className="muted">資產總額</div>
+              <div className="num">{fmtCompact(totalIdle)}</div>
+            </div>
+            <div className="robo-summary-stat">
+              <div className="muted">每月投入</div>
+              <div className="num">{fmt(monthlyTotal)}</div>
+            </div>
+            <div className="robo-summary-stat">
+              <div className="muted">混合年化</div>
+              <div className="num pos">{(blendedAll.ret * 100).toFixed(2)}%</div>
+            </div>
+          </div>
+        </section>
+
+        {/* Asset legend */}
+        <div className="robo-legend">
+          {ASSET_ORDER.map((k) => (
+            <span key={k} className="robo-legend-item">
+              <span className="robo-legend-dot" style={{ background: ASSETS[k].color }}></span>
+              <span>{ASSETS[k].name}</span>
+              <span className="muted num">{(ASSETS[k].ret * 100).toFixed(1)}%</span>
+            </span>
+          ))}
+        </div>
+
+        {/* Per-goal table */}
+        <section className="robo-table">
+          <header className="robo-table-head">
+            <span>目標</span>
+            <span>建議配置</span>
+            <span className="num">預估年化</span>
+            <span className="num">完成時間</span>
+            <span className="num">變化</span>
+          </header>
+          {recs.map((r) => {
+            const meta = TIER_META[r.tier];
+            const isOpen = selectedGoalId === r.id;
+            const better = r.etaDelta < 0;
+            return (
+              <div key={r.id}
+                className={"robo-row " + (isOpen ? "open " : "") + (better ? "is-better" : "")}
+                onClick={() => setSelectedGoalId(isOpen ? null : r.id)}>
+                <div className="robo-row-main">
+                  <span className="robo-row-name">
+                    <span className="goal-tier" data-tier={r.tier}>{r.tier}</span>
+                    <span>{r.label}</span>
+                  </span>
+                  <span className="robo-row-mix"><MixBar mix={r.mix}/></span>
+                  <span className="num robo-row-ret">{(r.expectedReturn * 100).toFixed(2)}%</span>
+                  <span className="num robo-row-eta">
+                    <span className="muted">{r.monthsRemaining}mo</span>
+                    <span className="arrow">→</span>
+                    <strong>{r.recommendedEta}mo</strong>
+                  </span>
+                  <span className={"num robo-row-delta " + (better ? "pos" : r.etaDelta > 0 ? "neg" : "muted")}>
+                    {r.etaDelta === 0 ? "—" : (r.etaDelta > 0 ? `+${r.etaDelta}` : r.etaDelta) + " mo"}
+                  </span>
+                </div>
+                {isOpen && (
+                  <div className="robo-row-detail">
+                    <div className="robo-row-mix-list">
+                      {ASSET_ORDER.filter((k) => r.mix[k]).map((k) => (
+                        <div key={k} className="robo-mix-item">
+                          <span className="robo-mix-dot" style={{ background: ASSETS[k].color }}></span>
+                          <div className="robo-mix-item-l">
+                            <strong>{ASSETS[k].name}</strong>
+                            <span className="muted"> · {ASSETS[k].ticker}</span>
+                          </div>
+                          <div className="robo-mix-item-pct num">{r.mix[k]}%</div>
+                          <div className="robo-mix-item-amt num muted">{fmt(Math.round(r.requiredMonthly * (r.mix[k] ?? 0) / 100))} / 月</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="robo-row-rationale">
+                      <div className="ff-label-sub muted">為什麼這樣配？</div>
+                      <p>
+                        {r.tier === "短期" && `${r.label} 距離到期僅 ${r.monthsRemaining} 個月，本金不能承受波動，因此以活存與短債為主，目標是「不虧錢」。`}
+                        {r.tier === "中期" && `${r.label} 約 ${Math.round(r.monthsRemaining / 12)} 年後使用，可承受一定波動以換取較高報酬，採平衡配置 (股 + 債)。`}
+                        {r.tier === "長期" && `${r.label} 距離 ${Math.round(r.monthsRemaining / 12)} 年以上，可全力參與市場成長，股票佔比為主、加入 REITs 分散。`}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </section>
+
+        {/* Action checklist */}
+        <section className="robo-actions">
+          <div className="robo-actions-head">
+            <div>
+              <div className="card-title">本月自動執行清單</div>
+              <div className="muted ff-label-sub">合計 {fmt(monthlyTotal)} · 啟用 Auto-Pilot 後每月 1 日自動配置</div>
+            </div>
+            <label className="robo-autopilot">
+              <input type="checkbox" checked={autoPilot} onChange={(e) => setAutoPilot(e.target.checked)}/>
+              <span className="robo-autopilot-track">
+                <span className="robo-autopilot-thumb"></span>
+              </span>
+              <span>啟用 Auto-Pilot</span>
+            </label>
+          </div>
+          <ul className="robo-checklist">
+            {actions.map((a) => (
+              <li key={a.asset.id} className="robo-check-item">
+                <span className="robo-check-dot" style={{ background: a.asset.color }}></span>
+                <div className="robo-check-l">
+                  <strong>轉入 {a.asset.name}</strong>
+                  <span className="muted"> · {a.asset.ticker} · 涵蓋 {a.goals.length} 個目標</span>
+                </div>
+                <div className="robo-check-r num">{fmt(a.amount)}</div>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* Chat */}
+        <section className="robo-chat">
+          <header className="robo-chat-head">
+            <div>
+              <div className="card-title">問顧問</div>
+              <div className="muted ff-label-sub">針對你的目標與配置自由提問 · 顧問會引用上方數字回答</div>
+            </div>
+            <span className="robo-chat-engine" title="顧問模型">
+              <span className="robo-chat-engine-dot"></span>
+              gemini-2.5-flash
+            </span>
+          </header>
+
+          <div className="robo-chat-thread" ref={threadRef}>
+            {messages.map((m, i) => (
+              <div key={i} className={"robo-chat-msg robo-chat-msg-" + m.role + (m.error ? " is-error" : "")}>
+                {m.role === "advisor" && (
+                  <span className="robo-chat-avatar">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="4" y="7" width="16" height="13" rx="2"/><path d="M9 12h.01M15 12h.01M9 16h6M12 4v3M8 4h8"/>
+                    </svg>
+                  </span>
+                )}
+                <div className="robo-chat-bubble">{m.text}</div>
+              </div>
+            ))}
+            {busy && (
+              <div className="robo-chat-msg robo-chat-msg-advisor">
+                <span className="robo-chat-avatar">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="4" y="7" width="16" height="13" rx="2"/><path d="M9 12h.01M15 12h.01M9 16h6M12 4v3M8 4h8"/>
+                  </svg>
+                </span>
+                <div className="robo-chat-bubble robo-chat-typing">
+                  <span></span><span></span><span></span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {messages.length <= 1 && (
+            <div className="robo-chat-suggests">
+              {suggestedPrompts.map((p) => (
+                <button key={p} type="button" className="robo-chat-suggest" onClick={() => send(p)}>{p}</button>
+              ))}
+            </div>
+          )}
+
+          <div className="robo-chat-input">
+            <input
+              type="text"
+              placeholder="向顧問提問⋯（Enter 送出）"
+              value={input}
+              disabled={busy}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") send(); }}
+            />
+            <button type="button" className="robo-chat-send" disabled={busy || !input.trim()} onClick={() => send()} aria-label="送出">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M13 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+        </section>
+
+        <footer className="modal-foot">
+          <div className="muted ff-label-sub" style={{ alignSelf: "center" }}>建議僅供參考 · 實際投資前請評估自身狀況</div>
+          <div className="modal-foot-right">
+            <button className="btn btn-ghost" onClick={onClose}>稍後設定</button>
+            <button className="btn btn-primary" onClick={onClose}>
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12l5 5L20 7"/></svg>
+              套用建議{autoPilot ? "並啟用 Auto-Pilot" : ""}
+            </button>
+          </div>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 // ===== GoalsView (main export) ===============================================
 export function GoalsView({
   goals: initialGoals,
@@ -929,7 +1406,7 @@ export function GoalsView({
   const [allocation, setAllocation] = useState<Allocation>({ 短期: 50, 中期: 30, 長期: 20 });
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [localMonthly, setLocalMonthly] = useState<Record<number, number>>({});
-  const [dialog, setDialog] = useState<"new" | "scenario" | null>(null);
+  const [dialog, setDialog] = useState<"new" | "scenario" | "robo" | null>(null);
   const [editGoal, setEditGoal] = useState<GoalView | null>(null);
 
   const goals = useMemo(
@@ -969,6 +1446,12 @@ export function GoalsView({
           <div className="topbar-sub muted">依結餘自動分配至短中長期，動態推算完成時間。</div>
         </div>
         <div className="topbar-actions">
+          <button className="btn btn-robo" type="button" onClick={() => setDialog("robo")}>
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4" y="7" width="16" height="13" rx="2"/><path d="M9 12h.01M15 12h.01M9 16h6M12 4v3M8 4h8"/>
+            </svg>
+            智能顧問
+          </button>
           <button className="btn btn-ghost" type="button" onClick={() => setDialog("scenario")}>
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
               <circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a13 13 0 0 1 0 18M12 3a13 13 0 0 0 0 18" />
@@ -1002,6 +1485,14 @@ export function GoalsView({
           <div className="kpi-val pos">{fmtCompact(totalMonthly)}</div>
         </div>
       </div>
+
+      {goals.length > 0 && (
+        <RoboBanner
+          idleAmount={totalCurrent}
+          projectedReturn={blendedReturn(RECIPES["長期"]["moderate"])}
+          onOpen={() => setDialog("robo")}
+        />
+      )}
 
       <Allocator surplus={surplus} allocation={allocation} onChange={setAllocation} />
 
@@ -1082,6 +1573,13 @@ export function GoalsView({
           surplus={surplus}
           income={income}
           expense={expense}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog === "robo" && goals.length > 0 && (
+        <RoboAdvisorModal
+          goals={goals}
+          surplus={surplus}
           onClose={() => setDialog(null)}
         />
       )}
