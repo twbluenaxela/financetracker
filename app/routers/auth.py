@@ -33,7 +33,7 @@ def login_submit(
         return templates.TemplateResponse(
             request,
             "login.html",
-            {"error": "Incorrect email or password."},
+            {"error": "帳號或密碼錯誤。"},
             status_code=401,
         )
 

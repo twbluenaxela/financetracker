@@ -1,19 +1,19 @@
 {% extends "base.html" %}
-{% block title %}Monthly summaries · Finance Tracker{% endblock %}
+{% block title %}每月收支 · 家庭理財{% endblock %}
 {% block body %}
   <header>
-    <h1>Monthly summaries</h1>
-    <form method="post" action="/logout"><button type="submit">Sign out</button></form>
+    <h1>每月收支</h1>
+    <form method="post" action="/logout"><button type="submit">登出</button></form>
   </header>
-  <p><a href="/">← Dashboard</a> · <a href="/months/new">+ Add a month</a></p>
+  <p><a href="/">← 總覽</a> · <a href="/months/new">+ 新增月份</a></p>
 
   {% if not summaries %}
-    <p class="muted">No months recorded yet. <a href="/months/new">Add your first month</a> from a 快速記帳 screenshot.</p>
+    <p class="muted">尚未記錄任何月份。請從 快速記帳 共享帳本截圖 <a href="/months/new">新增第一個月份</a>。</p>
   {% else %}
     <table style="width:100%; border-collapse:collapse;">
       <thead>
         <tr style="text-align:left; border-bottom:1px solid #888;">
-          <th>Month</th><th>Income</th><th>Expense</th><th>Surplus</th><th></th>
+          <th>月份</th><th>收入</th><th>支出</th><th>結餘</th><th></th>
         </tr>
       </thead>
       <tbody>
@@ -26,11 +26,11 @@
               ${{ "{:,.0f}".format(s.surplus) }}
             </td>
             <td>
-              <a href="/months/{{ s.year }}/{{ s.month }}/edit">edit</a>
+              <a href="/months/{{ s.year }}/{{ s.month }}/edit">編輯</a>
               <form method="post" action="/months/{{ s.year }}/{{ s.month }}/delete"
                     style="display:inline;"
-                    onsubmit="return confirm('Delete {{ s.year }}-{{ s.month }}?');">
-                <button type="submit" style="border:none; background:none; color:#c0392b; cursor:pointer;">delete</button>
+                    onsubmit="return confirm('確定要刪除 {{ s.year }}-{{ s.month }}？');">
+                <button type="submit" style="border:none; background:none; color:#c0392b; cursor:pointer;">刪除</button>
               </form>
             </td>
           </tr>

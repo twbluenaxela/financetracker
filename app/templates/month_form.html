@@ -1,25 +1,25 @@
 {% extends "base.html" %}
 {% block title %}
-  {{ "Edit" if summary else "Add" }} month · Finance Tracker
+  {{ "編輯" if summary else "新增" }}月份 · 家庭理財
 {% endblock %}
 {% block body %}
   <header>
-    <h1>{{ "Edit" if summary else "Add" }} a month</h1>
-    <form method="post" action="/logout"><button type="submit">Sign out</button></form>
+    <h1>{{ "編輯" if summary else "新增" }}月份</h1>
+    <form method="post" action="/logout"><button type="submit">登出</button></form>
   </header>
-  <p><a href="/months">← Monthly summaries</a></p>
+  <p><a href="/months">← 每月收支</a></p>
   <p class="muted">
-    Open the 快速記帳 monthly view for the month, then copy the totals here.
-    Category rows are optional — fill what the screenshot shows.
+    開啟 快速記帳 共享帳本 的該月檢視畫面，將月收入與月支出填入下方。
+    分類明細為選填，依截圖填寫即可。
   </p>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
   <form method="post" action="/months">
-    <label>Year
+    <label>年
       <input type="number" name="year" min="2000" max="2100"
              value="{{ form.year }}" required />
     </label>
-    <label>Month
+    <label>月
       <select name="month" required>
         {% for m in range(1, 13) %}
           <option value="{{ m }}"
@@ -30,19 +30,19 @@
       </select>
     </label>
 
-    <label>Total income (月收入, TWD)
+    <label>月收入（TWD）
       <input type="number" step="0.01" min="0" name="total_income"
              value="{{ form.total_income if form.total_income is not none else '' }}" />
     </label>
-    <label>Total expense (月支出, TWD)
+    <label>月支出（TWD）
       <input type="number" step="0.01" min="0" name="total_expense"
              value="{{ form.total_expense if form.total_expense is not none else '' }}" />
     </label>
-    <label>Note (optional)
+    <label>備註（選填）
       <input type="text" name="note" value="{{ form.note or '' }}" />
     </label>
 
-    <h3>Category breakdown <span class="muted">(optional)</span></h3>
+    <h3>分類明細 <span class="muted">（選填）</span></h3>
     <div id="cats">
       {% set existing = summary.lines if summary else [] %}
       {% for line in existing %}
@@ -68,6 +68,6 @@
       {% endfor %}
     </div>
 
-    <p style="margin-top:1rem;"><button type="submit">Save month</button></p>
+    <p style="margin-top:1rem;"><button type="submit">儲存月份</button></p>
   </form>
 {% endblock %}

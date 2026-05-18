@@ -125,10 +125,10 @@ async def upsert_month(
         year = int(form.get("year", ""))
         month = int(form.get("month", ""))
     except ValueError:
-        return reject("Year and month must be numbers.")
+        return reject("年和月必須是數字。")
 
     if not (2000 <= year <= 2100) or not (1 <= month <= 12):
-        return reject("Year must be 2000-2100 and month 1-12.")
+        return reject("年須為 2000–2100，月須為 1–12。")
 
     income = _parse_money(form.get("total_income")) or Decimal(0)
     expense = _parse_money(form.get("total_expense")) or Decimal(0)
@@ -143,7 +143,7 @@ async def upsert_month(
             continue
         amount = _parse_money(amounts[i] if i < len(amounts) else None)
         if amount is None:
-            return reject(f"Category '{name}' needs a valid amount.")
+            return reject(f"分類「{name}」需要有效的金額。")
         kind = kinds[i] if i < len(kinds) else "expense"
         if kind not in ("expense", "income"):
             kind = "expense"
