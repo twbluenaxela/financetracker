@@ -7,7 +7,7 @@ import { getSessionUser } from "@/lib/auth";
 const schema = z.object({
   system: z.string().min(1).max(2000),
   user: z.string().min(1).max(8000),
-  model: z.string().min(1).max(100).default("gemini-2.0-flash-preview"),
+  model: z.string().min(1).max(100).default("gemini-3-flash-preview"),
 });
 
 export async function POST(request: Request) {

@@ -1025,7 +1025,7 @@ function RoboAdvisorModal({ goals, surplus, onClose }: { goals: GoalView[]; surp
   const [risk, setRisk] = useState<RiskKey>("moderate");
   const [autoPilot, setAutoPilot] = useState(true);
   const [selectedGoalId, setSelectedGoalId] = useState<number | null>(goals[0]?.id ?? null);
-  const [model, setModel] = useState("gemini-2.0-flash-preview");
+  const [model, setModel] = useState("gemini-3-flash-preview");
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: "advisor", text: "嗨，我可以幫你說明任何一個目標的配置理由、比較不同風險組合，或估算如果提高某個目標的月配置會提前多久達標。試著下面的問題或自由提問。" },
@@ -1350,7 +1350,7 @@ function RoboAdvisorModal({ goals, surplus, onClose }: { goals: GoalView[]; surp
                 onChange={(e) => setModel(e.target.value)}
               >
                 {(availableModels.length ? availableModels : [
-                  "gemini-2.0-flash-preview",
+                  "gemini-3-flash-preview",
                   "gemini-2.5-flash-preview-05-20",
                   "gemini-2.5-flash",
                   "gemini-2.5-pro-preview-06-05",
