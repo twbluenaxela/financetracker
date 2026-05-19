@@ -1,8 +1,11 @@
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth";
 import { MonthsView } from "@/app/months/months-view";
 
 export default async function MonthsPage() {
+  const user = await requireUser();
   const months = await prisma.monthlySummary.findMany({
+    where: { householdId: user.householdId },
     orderBy: [{ year: "desc" }, { month: "desc" }],
     include: {
       lines: true,

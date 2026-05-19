@@ -17,3 +17,6 @@ out/
 
 # OS
 .DS_Store
+
+# Personal research / notes
+docs/

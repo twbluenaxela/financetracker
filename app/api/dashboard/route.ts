@@ -9,6 +9,6 @@ export async function GET() {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const data = await getDashboardData();
+  const data = await getDashboardData(user.householdId);
   return NextResponse.json(data);
 }

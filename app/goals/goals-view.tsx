@@ -916,40 +916,52 @@ function ScenarioModal({
 
 // ===== Robo-Advisor ==========================================================
 
-const ASSETS: Record<string, { id: string; name: string; ticker: string; ret: number; color: string }> = {
-  cash:    { id: "cash",    name: "高利活存",       ticker: "HYSA",       ret: 0.016, color: "oklch(0.80 0.09 155)" },
-  bond:    { id: "bond",    name: "投資級債券 ETF", ticker: "00679B/BND", ret: 0.038, color: "oklch(0.78 0.09 235)" },
-  twStock: { id: "twStock", name: "台股市值型 ETF", ticker: "0050",       ret: 0.075, color: "oklch(0.78 0.11 65)"  },
-  usStock: { id: "usStock", name: "美股全市場 ETF", ticker: "VT",         ret: 0.082, color: "oklch(0.74 0.13 35)"  },
-  reit:    { id: "reit",    name: "REITs",          ticker: "VNQ",        ret: 0.055, color: "oklch(0.74 0.10 350)" },
+// Asset universe — Boglehead three-fund logic adapted for a Taiwanese investor using Schwab.
+// REITs excluded: already inside VT at market weight, no separate tilt needed per Boglehead philosophy.
+// Cash = TW bank 定存/活存 (TWD, no FX risk). Bond = BNDW (global bonds, better than BND for non-USD).
+// Equities split into 全球 (VT, ~60% US + 40% intl) and an optional 台股 tilt (0050) for home bias.
+// Returns are long-run historical estimates, not projections.
+const ASSETS: Record<string, { id: string; name: string; ticker: string; ret: number; color: string; fxRisk?: boolean }> = {
+  cash:    { id: "cash",    name: "定存 / 活存",     ticker: "台灣銀行", ret: 0.018, color: "oklch(0.80 0.09 155)" },
+  bond:    { id: "bond",    name: "全球債券 ETF",    ticker: "BNDW",    ret: 0.035, color: "oklch(0.78 0.09 235)", fxRisk: true },
+  world:   { id: "world",   name: "全球股市 ETF",    ticker: "VT",      ret: 0.079, color: "oklch(0.74 0.13 35)",  fxRisk: true },
+  twStock: { id: "twStock", name: "台股市值型 ETF",  ticker: "0050",    ret: 0.075, color: "oklch(0.78 0.11 65)"  },
 };
-const ASSET_ORDER = ["cash", "bond", "twStock", "usStock", "reit"];
+const ASSET_ORDER = ["cash", "bond", "world", "twStock"];
 
 type AssetMix = Partial<Record<string, number>>;
 type RiskKey = "conservative" | "moderate" | "aggressive";
 
+// Recipe logic follows Boglehead principles:
+// - 短期 (<1yr): capital preservation only — no equities regardless of risk profile.
+//   Even "aggressive" short-term money stays in cash/short bonds to avoid sequence risk.
+// - 中期 (1–5yr): bonds buffer drawdowns; equities grow the remainder.
+//   Bond % decreases as risk tolerance rises.
+// - 長期 (5+yr): equity-heavy. Bond % ≈ "age in bonds" heuristic simplified to risk tier.
+//   Conservative ~35% bonds, moderate ~15%, aggressive ~5%.
+//   Optional 0050 tilt (15%) within equity sleeve for home bias — not required by BH philosophy.
 const RECIPES: Record<string, Record<RiskKey, AssetMix>> = {
   "短期": {
     conservative: { cash: 100 },
-    moderate:     { cash: 70, bond: 30 },
-    aggressive:   { cash: 50, bond: 50 },
+    moderate:     { cash: 100 },
+    aggressive:   { cash: 85, bond: 15 },
   },
   "中期": {
-    conservative: { cash: 30, bond: 50, twStock: 15, usStock: 5 },
-    moderate:     { cash: 15, bond: 35, twStock: 25, usStock: 25 },
-    aggressive:   { cash: 5,  bond: 20, twStock: 35, usStock: 35, reit: 5 },
+    conservative: { cash: 20, bond: 45, world: 25, twStock: 10 },
+    moderate:     { cash: 10, bond: 25, world: 50, twStock: 15 },
+    aggressive:   { cash: 5,  bond: 10, world: 65, twStock: 20 },
   },
   "長期": {
-    conservative: { cash: 10, bond: 35, twStock: 25, usStock: 25, reit: 5 },
-    moderate:     { cash: 5,  bond: 15, twStock: 30, usStock: 40, reit: 10 },
-    aggressive:   { bond: 5,  twStock: 35, usStock: 45, reit: 15 },
+    conservative: { bond: 35, world: 50, twStock: 15 },
+    moderate:     { bond: 15, world: 70, twStock: 15 },
+    aggressive:   { bond: 5,  world: 80, twStock: 15 },
   },
 };
 
 const RISK_META: Record<RiskKey, { label: string; sub: string; color: string }> = {
-  conservative: { label: "保守", sub: "重現金 · 低波動",    color: "var(--pos)"  },
-  moderate:     { label: "穩健", sub: "均衡配置 · 經典 6/4", color: "var(--accent)" },
-  aggressive:   { label: "積極", sub: "重股票 · 長期成長",  color: "var(--warn)" },
+  conservative: { label: "保守", sub: "重債券 · 低波動",     color: "var(--pos)"    },
+  moderate:     { label: "穩健", sub: "三基金 · 均衡配置",   color: "var(--accent)" },
+  aggressive:   { label: "積極", sub: "重股票 · 長期成長",   color: "var(--warn)"   },
 };
 
 function blendedReturn(mix: AssetMix): number {
@@ -1237,7 +1249,9 @@ function RoboAdvisorModal({ goals, surplus, onClose }: { goals: GoalView[]; surp
           {ASSET_ORDER.map((k) => (
             <span key={k} className="robo-legend-item">
               <span className="robo-legend-dot" style={{ background: ASSETS[k].color }}></span>
-              <span>{ASSETS[k].name}</span>
+              <span>{ASSETS[k].ticker}</span>
+              {ASSETS[k].fxRisk && <span className="robo-tag robo-tag-fx">FX</span>}
+              {k === "twStock" && <span className="robo-tag robo-tag-pfic">PFIC</span>}
               <span className="muted num">{(ASSETS[k].ret * 100).toFixed(1)}%</span>
             </span>
           ))}
@@ -1285,6 +1299,8 @@ function RoboAdvisorModal({ goals, surplus, onClose }: { goals: GoalView[]; surp
                           <div className="robo-mix-item-l">
                             <strong>{ASSETS[k].name}</strong>
                             <span className="muted"> · {ASSETS[k].ticker}</span>
+                            {ASSETS[k].fxRisk && <span className="robo-tag robo-tag-fx">FX</span>}
+                            {k === "twStock" && <span className="robo-tag robo-tag-pfic">PFIC ⚠</span>}
                           </div>
                           <div className="robo-mix-item-pct num">{r.mix[k]}%</div>
                           <div className="robo-mix-item-amt num muted">{fmt(Math.round(r.requiredMonthly * (r.mix[k] ?? 0) / 100))} / 月</div>
@@ -1294,10 +1310,22 @@ function RoboAdvisorModal({ goals, surplus, onClose }: { goals: GoalView[]; surp
                     <div className="robo-row-rationale">
                       <div className="ff-label-sub muted">為什麼這樣配？</div>
                       <p>
-                        {r.tier === "短期" && `${r.label} 距離到期僅 ${r.monthsRemaining} 個月，本金不能承受波動，因此以活存與短債為主，目標是「不虧錢」。`}
-                        {r.tier === "中期" && `${r.label} 約 ${Math.round(r.monthsRemaining / 12)} 年後使用，可承受一定波動以換取較高報酬，採平衡配置 (股 + 債)。`}
-                        {r.tier === "長期" && `${r.label} 距離 ${Math.round(r.monthsRemaining / 12)} 年以上，可全力參與市場成長，股票佔比為主、加入 REITs 分散。`}
+                        {r.tier === "短期" && `${r.label} 距離到期僅 ${r.monthsRemaining} 個月，本金不能承受波動，以定存為主、保留本金，目標是「不虧錢」。`}
+                        {r.tier === "中期" && `${r.label} 約 ${Math.round(r.monthsRemaining / 12)} 年後使用，可承受一定波動，採 Boglehead 平衡配置：BNDW 緩衝、VT 成長、0050 台股加碼。`}
+                        {r.tier === "長期" && `${r.label} 距離 ${Math.round(r.monthsRemaining / 12)} 年以上，可全力參與市場長期成長。VT 持有全球約 9,000 支股票，BNDW 提供少量債券緩衝。0050 為台股家庭偏好配置，美籍人士注意 PFIC 限制。`}
                       </p>
+                      {(r.mix["world"] || r.mix["bond"]) && (
+                        <p className="robo-note-fx">
+                          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zM2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                          VT / BNDW 以美元計價，透過 Schwab 購入；匯款建議批次操作以降低電匯手續費（每筆 NT$400–800）。
+                        </p>
+                      )}
+                      {r.mix["twStock"] && (
+                        <p className="robo-note-pfic">
+                          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+                          0050 為台灣註冊 ETF，屬 PFIC，美國公民購買須申報 Form 8621，稅務極複雜。建議由台籍配偶持有；美籍人士可用 VT 替代台股部位。
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1565,12 +1593,6 @@ export function GoalsView({
                   </div>
                 </div>
               </div>
-              <button className="link-btn" type="button" onClick={openAdd}>
-                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-                新增 {tier}目標
-              </button>
             </header>
 
             <div className="tier-grid">
@@ -1584,16 +1606,14 @@ export function GoalsView({
                   onEdit={openEdit}
                 />
               ))}
-              {grouped[tier].length === 0 && (
-                <button className="month-tile empty" type="button" onClick={openAdd} style={{ minHeight: 80 }}>
-                  <span className="mt-empty">
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                      <path d="M12 5v14M5 12h14" />
-                    </svg>
-                    新增 {tier}目標
-                  </span>
-                </button>
-              )}
+              <button className="month-tile empty tier-add-tile" type="button" onClick={openAdd}>
+                <span className="mt-empty">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  新增 {tier}目標
+                </span>
+              </button>
             </div>
           </div>
         ))}

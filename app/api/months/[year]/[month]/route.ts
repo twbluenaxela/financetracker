@@ -8,14 +8,14 @@ export async function DELETE(
   { params }: { params: Promise<{ year: string; month: string }> },
 ) {
   const user = await getSessionUser();
-  if (!user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!user.canEdit) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const { year, month } = await params;
 
   await prisma.monthlySummary.deleteMany({
     where: {
+      householdId: user.householdId,
       year: Number(year),
       month: Number(month),
     },

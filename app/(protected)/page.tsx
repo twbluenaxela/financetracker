@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 
 import { getDashboardData } from "@/lib/dashboard";
+import { requireUser } from "@/lib/auth";
 
 const monthChinese = (m: number) =>
   ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二"][m - 1] + "月";
@@ -19,7 +20,8 @@ const compact = (n: number) => {
 };
 
 export default async function DashboardPage() {
-  const data = await getDashboardData();
+  const user = await requireUser();
+  const data = await getDashboardData(user.householdId);
   const months = data.months;
   const current = data.current;
   const previous = data.previous;

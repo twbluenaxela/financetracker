@@ -1,19 +1,23 @@
 import { StatementsView } from "@/app/statements/statements-view";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth";
 import { buildStatements } from "@/lib/statements";
 
 export default async function StatementsPage() {
+  const user = await requireUser();
   const [months, goals, plan] = await Promise.all([
     prisma.monthlySummary.findMany({
+      where: { householdId: user.householdId },
       orderBy: [{ year: "asc" }, { month: "asc" }],
       include: {
         lines: true,
       },
     }),
     prisma.goal.findMany({
+      where: { householdId: user.householdId },
       orderBy: [{ priority: "asc" }, { id: "asc" }],
     }),
-    prisma.investmentPlan.findUnique({ where: { id: 1 } }),
+    prisma.investmentPlan.findUnique({ where: { householdId: user.householdId } }),
   ]);
 
   return (

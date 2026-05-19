@@ -55,10 +55,10 @@ After any schema change: run `prisma db push`, commit the updated `schema.prisma
 ## Deployment
 
 ```bash
-fly deploy                # build, push image, run release command, deploy
-fly logs -a financetrackertw    # tail live logs
-fly secrets list -a financetrackertw   # check secrets
-fly secrets set KEY=value -a financetrackertw  # set a secret
+fly deploy                          # build, push image, run release command, deploy
+fly logs -a financetrackertw        # tail live logs
+fly secrets list -a financetrackertw
+fly secrets set KEY=value -a financetrackertw
 ```
 
 ## Project structure
@@ -69,29 +69,33 @@ app/
     page.tsx              # dashboard
     months/               # monthly cash flow list + new/edit forms
     goals/                # savings goals
-    invest/               # investment calculator
     statements/           # three-statement financial view
+    settings/             # household settings — members, permissions, invite links
   api/
     auth/login/           # POST — exchange Firebase ID token for session cookie
     auth/logout/          # POST — revoke and clear session cookie
-    dashboard/            # GET  — dashboard data
+    dashboard/            # GET  — dashboard data (scoped to household)
     goals/                # POST — upsert goal; [id]/DELETE
-    invest/               # POST — upsert investment plan
     months/               # POST — upsert monthly summary; [year]/[month]/DELETE
+    invite/               # POST — generate invite token (owner only)
+    invite/[token]/       # POST — accept invite (joins caller to household)
+    household/members/[uid]/  # PATCH canEdit, DELETE member (owner only)
+  invite/[token]/         # public invite acceptance page (no auth gate — handles it inline)
   login/                  # public login page
   globals.css             # design tokens + global styles (no Tailwind)
   layout.tsx              # root layout — loads Google fonts
 
 components/
-  app-shell.tsx           # outer grid (sidebar + main)
-  sidebar.tsx             # nav, user pill, logout
+  app-shell.tsx           # outer grid (sidebar + main), collapsible sidebar state
+  sidebar.tsx             # nav, user pill, logout, collapse toggle
 
 lib/
-  auth.ts                 # session management (server-only)
+  auth.ts                 # session management (server-only); requireUser returns SessionUser
+  household.ts            # getOrCreateHousehold — auto-provisions on first login
   firebase.ts             # client SDK init
   firebase-admin.ts       # admin SDK init (server-only)
   prisma.ts               # Prisma singleton
-  dashboard.ts            # dashboard data query
+  dashboard.ts            # getDashboardData(householdId)
   statements.ts           # StatementBundle builder + formatting helpers
   wealth.ts               # goal PMT calculation + money formatters
   invest.ts               # blended return, growth schedules, allocation recommender
@@ -107,16 +111,35 @@ fly.toml                  # Fly.io config — app: financetrackertw, region: nrt
 
 - **Server components by default.** Client components are `"use client"` and live in `*-view.tsx` or `*-form.tsx` files alongside their server page.
 - **Auth pattern:** server pages call `requireUser()` (redirects to /login if no session); API routes call `getSessionUser()` and return 401.
-- **API pattern:** auth check → Zod parse → Prisma → `{ ok: true }`.
+- **Household scoping:** every Prisma query on financial data (`MonthlySummary`, `Goal`, `InvestmentPlan`) must include `where: { householdId: user.householdId }`. Never query without it.
+- **Permission check:** mutation API routes check `user.canEdit` (or `user.role === "owner"` for admin actions) before touching the DB.
+- **API pattern:** auth check → permission check → Zod parse → Prisma → `{ ok: true }`.
 - **No Prisma in client components.** Pages fetch via their own API routes or receive data as props from the RSC parent.
-- **`server-only`** is imported in `lib/auth.ts` and `lib/firebase-admin.ts` to prevent accidental client bundle inclusion.
+- **`server-only`** is imported in `lib/auth.ts`, `lib/household.ts`, and `lib/firebase-admin.ts` to prevent accidental client bundle inclusion.
 - **Decimal fields** come out of Prisma as `Decimal` objects — always wrap with `Number()` before math or serialization.
 - **`@/`** path alias maps to project root (e.g. `@/lib/auth`).
 - **CSS classes** are hand-written in `globals.css`. Design tokens are CSS custom properties (`--bg`, `--accent`, `--text`, etc.). No Tailwind.
-- **InvestmentPlan is a singleton** — always `id: 1`. Use upsert.
+- **InvestmentPlan is per-household** — unique on `householdId`. Use `upsert` with `where: { householdId }`. There is no longer a singleton id=1.
 - **No migration files** — schema changes go through `prisma db push`. Do not run `prisma migrate dev`.
+
+## Households
+
+Every user belongs to exactly one household. On first login, `getOrCreateHousehold(uid)` (called inside `getSessionUser`) auto-creates a household and makes the user its owner.
+
+`requireUser()` and `getSessionUser()` both return:
+```ts
+{
+  uid: string;
+  email: string | null;
+  name: string | null;
+  householdId: number;
+  role: string;       // "owner" | "member"
+  canEdit: boolean;
+}
+```
+
+Invite links are one-time-use, 7-day tokens stored in `household_invites`. They are valid across Fly machine restarts because the token lives in Neon, not in memory.
 
 ## Planned features
 
-- **Households with invites** — multi-user support where users belong to a shared household. Invite links let others join. Default permission is view-only; owner can grant edit access. Not yet built — will require `Household`, `HouseholdMember`, `HouseholdInvite` models and `householdId` on all financial tables.
-- **Robo-advisor** — Gemini API integration for AI financial advice. Reference implementation in `reference/robo-advisor/`. `GEMINI_API_KEY` is already in env, not yet wired up.
+- **Robo-advisor** — Gemini API integration for AI financial advice. `GEMINI_API_KEY` is already in env, not yet wired up.

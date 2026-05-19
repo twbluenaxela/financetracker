@@ -17,15 +17,12 @@ const schema = z.object({
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
-  if (!user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!user.canEdit) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const json = await request.json();
   const parsed = schema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_input" }, { status: 400 });
-  }
+  if (!parsed.success) return NextResponse.json({ error: "invalid_input" }, { status: 400 });
 
   const data = parsed.data;
   const payload = {
@@ -39,8 +36,13 @@ export async function POST(request: Request) {
   };
 
   const goal = data.id
-    ? await prisma.goal.update({ where: { id: data.id }, data: payload })
-    : await prisma.goal.create({ data: payload });
+    ? await prisma.goal.update({
+        where: { id: data.id, householdId: user.householdId },
+        data: payload,
+      })
+    : await prisma.goal.create({
+        data: { ...payload, householdId: user.householdId },
+      });
 
   return NextResponse.json({ ok: true, id: goal.id });
 }

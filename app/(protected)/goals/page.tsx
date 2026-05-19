@@ -1,13 +1,17 @@
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth";
 import { GoalsView } from "@/app/goals/goals-view";
 import { calculateGoalPmt } from "@/lib/wealth";
 
 export default async function GoalsPage() {
+  const user = await requireUser();
   const goals = await prisma.goal.findMany({
+    where: { householdId: user.householdId },
     orderBy: [{ priority: "asc" }, { id: "asc" }],
   });
 
   const latestMonth = await prisma.monthlySummary.findFirst({
+    where: { householdId: user.householdId },
     orderBy: [{ year: "desc" }, { month: "desc" }],
   });
 

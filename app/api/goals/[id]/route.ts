@@ -8,11 +8,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await getSessionUser();
-  if (!user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!user.canEdit) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const { id } = await params;
-  await prisma.goal.delete({ where: { id: Number(id) } });
+  await prisma.goal.delete({ where: { id: Number(id), householdId: user.householdId } });
   return NextResponse.json({ ok: true });
 }

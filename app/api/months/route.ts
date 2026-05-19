@@ -23,20 +23,18 @@ const schema = z.object({
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
-  if (!user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!user.canEdit) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const json = await request.json();
   const parsed = schema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_input" }, { status: 400 });
-  }
+  if (!parsed.success) return NextResponse.json({ error: "invalid_input" }, { status: 400 });
 
   const data = parsed.data;
   const summary = await prisma.monthlySummary.upsert({
     where: {
-      year_month: {
+      householdId_year_month: {
+        householdId: user.householdId,
         year: data.year,
         month: data.month,
       },
@@ -51,6 +49,7 @@ export async function POST(request: Request) {
       },
     },
     create: {
+      householdId: user.householdId,
       year: data.year,
       month: data.month,
       totalIncome: data.totalIncome,

@@ -4,9 +4,19 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { adminAuth } from "@/lib/firebase-admin";
+import { getOrCreateHousehold } from "@/lib/household";
 
 const COOKIE_NAME = "financetracker_session";
 const SESSION_MAX_AGE_MS = 60 * 60 * 24 * 14 * 1000; // 14 days
+
+export type SessionUser = {
+  uid: string;
+  email: string | null;
+  name: string | null;
+  householdId: number;
+  role: string;
+  canEdit: boolean;
+};
 
 export async function createSession(idToken: string) {
   const sessionCookie = await adminAuth.createSessionCookie(idToken, {
@@ -33,20 +43,26 @@ export async function destroySession() {
   cookieStore.delete(COOKIE_NAME);
 }
 
-export async function getSessionUser() {
+export async function getSessionUser(): Promise<SessionUser | null> {
   const cookieStore = await cookies();
   const session = cookieStore.get(COOKIE_NAME)?.value;
   if (!session) return null;
 
   try {
     const decoded = await adminAuth.verifySessionCookie(session, true);
-    return { uid: decoded.uid, email: decoded.email ?? null, name: decoded.name ?? null };
+    const membership = await getOrCreateHousehold(decoded.uid);
+    return {
+      uid: decoded.uid,
+      email: decoded.email ?? null,
+      name: decoded.name ?? null,
+      ...membership,
+    };
   } catch {
     return null;
   }
 }
 
-export async function requireUser() {
+export async function requireUser(): Promise<SessionUser> {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   return user;

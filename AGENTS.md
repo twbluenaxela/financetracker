@@ -63,15 +63,19 @@ Schema is managed with **`prisma db push`** — there are no migration files. Do
 | Model | Purpose |
 |---|---|
 | `User` | Legacy from Python/argon2 era. Unused — do not write to it. Remove when convenient. |
-| `MonthlySummary` | One row per calendar month. `totalIncome`, `totalExpense`, optional `note`. Has-many `CategoryLine`. Unique on `(year, month)`. |
+| `Household` | Named household. All financial data belongs to a household. |
+| `HouseholdMember` | Links a Firebase UID to a household with role + canEdit. Composite PK `(householdId, firebaseUid)`. |
+| `HouseholdInvite` | One-time invite token. PK is the token string. Expires after 7 days. |
+| `MonthlySummary` | One row per household per calendar month. Unique on `(householdId, year, month)`. Has-many `CategoryLine`. |
 | `CategoryLine` | Named income or expense line item. `kind` is `"income"` or `"expense"`. Belongs to `MonthlySummary`, cascades on delete. |
-| `Goal` | Savings goal with target/current amounts, expected annual return, optional deadline, priority. |
-| `InvestmentPlan` | Singleton (always `id: 1`). Asset allocation percentages, return assumptions, contribution plan. Always upsert. |
+| `Goal` | Savings goal scoped to a household. Has target/current amounts, expected annual return, optional deadline, priority. |
+| `InvestmentPlan` | One per household (`@unique householdId`). Asset allocation percentages, return assumptions, contribution plan. Always upsert by `householdId`. |
 
 ### Things to know
 
 - **Decimal fields** come out of Prisma as `Decimal` objects. Always `Number(row.field)` before math or JSON serialization.
 - **`MonthlySummary` save pattern:** deletes all `CategoryLine` children then recreates them. No partial line updates — always a full replace.
+- **Household scoping is mandatory.** Every query on `MonthlySummary`, `Goal`, or `InvestmentPlan` must include `where: { householdId }`. Omitting it would leak data across households.
 
 ---
 
@@ -102,18 +106,23 @@ Never skip the auth check. Never call Prisma without validating input first.
 |---|---|---|
 | `/api/auth/login` | POST | Accepts `{ idToken }`, creates Firebase session cookie |
 | `/api/auth/logout` | POST | Revokes Firebase session, clears cookie |
-| `/api/dashboard` | GET | Returns last 12 months + goals data |
+| `/api/dashboard` | GET | Returns last 12 months + goals data (scoped to household) |
 | `/api/goals` | POST | Upsert goal (pass `id` to update, omit to create) |
 | `/api/goals/[id]` | DELETE | Delete a goal by id |
-| `/api/invest` | POST | Upsert the singleton InvestmentPlan (always id=1) |
 | `/api/months` | POST | Upsert monthly summary + category lines |
 | `/api/months/[year]/[month]` | DELETE | Delete monthly summary (cascades to lines) |
+| `/api/invite` | POST | Generate a 7-day one-time invite token (owner only) |
+| `/api/invite/[token]` | POST | Accept invite — joins caller to the household |
+| `/api/household/members/[uid]` | PATCH | Toggle `canEdit` for a member (owner only) |
+| `/api/household/members/[uid]` | DELETE | Remove a member (owner only) |
 
 ### Things to know
 
-- The dashboard page calls `getDashboardData()` directly (RSC, no HTTP hop). `/api/dashboard` exists for future client-side use.
-- All mutation routes are POST with upsert semantics — no PUT/PATCH.
+- The dashboard page calls `getDashboardData(householdId)` directly (RSC, no HTTP hop). `/api/dashboard` exists for future client-side use.
+- All mutation routes are POST with upsert semantics — no PUT/PATCH (except member PATCH).
 - Zod schemas are inline in each route file.
+- Every route that mutates data checks `user.canEdit` before proceeding. Owner-only routes check `user.role === "owner"`.
+- All financial queries are scoped by `householdId`. Never query `MonthlySummary`, `Goal`, or `InvestmentPlan` without `where: { householdId }`.
 
 ---
 
@@ -266,15 +275,55 @@ CSS is one file, organized by section headers. No CSS modules — all class name
 
 ---
 
-## Planned: Households
+## Households
 
-The app currently has no user isolation — all data is shared. The planned architecture:
+**Files:** `lib/household.ts`, `app/api/invite/`, `app/api/household/`, `app/(protected)/settings/`, `app/invite/[token]/`
 
-- `Household` — name, owner Firebase UID
-- `HouseholdMember` — links Firebase UIDs to a household with a role (`owner` / `member`)
-- `HouseholdInvite` — time-limited token for invite links; one-time use
-- All financial models (`MonthlySummary`, `Goal`, `InvestmentPlan`) get a `householdId` foreign key
-- First login → create a household automatically if user doesn't belong to one
-- Accepting an invite merges you into the inviter's household
-- Default member permission: view-only. Owner can grant edit access per member.
-- Every Prisma query must be scoped by `householdId` after this is built.
+### How it works
+
+Every user belongs to exactly one household. All financial data (`MonthlySummary`, `Goal`, `InvestmentPlan`) is scoped to a household via `householdId`.
+
+**First login auto-provision:**
+`getSessionUser()` calls `getOrCreateHousehold(uid)` on every request. If the user has no `HouseholdMember` row, a new `Household` is created and the user is inserted as `role: "owner"`, `canEdit: true`. This is idempotent — subsequent requests find the existing row.
+
+**What `requireUser()` / `getSessionUser()` return:**
+```ts
+{
+  uid: string;
+  email: string | null;
+  name: string | null;
+  householdId: number;
+  role: string;       // "owner" | "member"
+  canEdit: boolean;
+}
+```
+
+**Invite flow:**
+1. Owner POSTs to `/api/invite` → server creates a `HouseholdInvite` row with a 64-char random hex token, 7-day expiry
+2. Client builds `window.location.origin + "/invite/" + token` and shows it to the owner
+3. Recipient opens the link → `/invite/[token]` page (public, no auth gate) POSTs to `/api/invite/[token]`
+4. Server validates token (exists, not used, not expired), checks recipient isn't already in a household, creates a `HouseholdMember` row and marks the invite used — all in a transaction
+5. Recipient is redirected to the dashboard
+
+**Permissions:**
+- `role: "owner"` — can manage members, generate invites, do everything
+- `role: "member"`, `canEdit: true` — can add/edit/delete financial data
+- `role: "member"`, `canEdit: false` — read-only; mutation routes return 403
+
+**Settings page (`/settings`):**
+Server component fetches all members for the household. Client view (`app/settings/settings-view.tsx`) lets the owner generate invite links, toggle `canEdit` per member, and remove members.
+
+### Schema
+
+| Model | Purpose |
+|---|---|
+| `Household` | Named household. id is auto-increment. |
+| `HouseholdMember` | Composite PK `(householdId, firebaseUid)`. `role` is `"owner"` or `"member"`. `canEdit` controls write access. |
+| `HouseholdInvite` | PK is the token string. `usedAt` and `usedBy` set on acceptance. Expires after 7 days. |
+
+### Things to know
+
+- Invite tokens live in Neon — they survive Fly machine restarts and cold starts. The machine sleeping between requests has no effect on token validity.
+- A user can only belong to one household. Accepting an invite when already a member returns 409.
+- The owner cannot remove themselves or change their own `canEdit`.
+- `InvestmentPlan` is now unique per household (`@unique` on `householdId`), not a singleton id=1. Always `findUnique({ where: { householdId } })` and `upsert` with `where: { householdId }`.

@@ -46,10 +46,16 @@ function activeFromPath(pathname: string) {
 
 export function Sidebar({
   user,
+  householdName,
   memberCount,
+  collapsed,
+  onToggle,
 }: {
   user: SessionUser;
+  householdName: string;
   memberCount: number;
+  collapsed: boolean;
+  onToggle: () => void;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -57,6 +63,7 @@ export function Sidebar({
   const active = activeFromPath(pathname);
   const display = userDisplay(user.email ?? user.uid);
   const initial = display.slice(0, 1).toUpperCase();
+  const onSettings = pathname.startsWith("/settings");
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -82,10 +89,16 @@ export function Sidebar({
             <circle cx="26" cy="8" r="2.5" fill="currentColor" />
           </svg>
         </div>
-        <div>
+        <div className="brand-text">
           <div className="brand-name">家庭理財</div>
-          <div className="brand-sub">Shared Ledger</div>
         </div>
+        <button className="sidebar-toggle" type="button" onClick={onToggle} aria-label={collapsed ? "展開側欄" : "收合側欄"} title={collapsed ? "展開側欄" : "收合側欄"}>
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            {collapsed
+              ? <path d="M9 18l6-6-6-6"/>
+              : <path d="M15 18l-6-6 6-6"/>}
+          </svg>
+        </button>
       </div>
 
       <nav className="nav">
@@ -113,14 +126,14 @@ export function Sidebar({
       </nav>
 
       <div className="sidebar-foot">
-        <div className="ledger-card">
+        <Link href="/settings" className={`ledger-card${onSettings ? " active" : ""}`}>
           <div className="ledger-card-row">
             <span className="muted">共享帳本</span>
             <span className="dot dot-live"></span>
           </div>
-          <div className="ledger-card-title">家庭理財</div>
+          <div className="ledger-card-title">{householdName}</div>
           <div className="ledger-card-meta">{memberCount} 位成員 · TWD</div>
-        </div>
+        </Link>
 
         <div className="user-pill">
           <div className="avatar">{initial}</div>

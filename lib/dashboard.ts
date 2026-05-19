@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { calculateGoalPmt } from "@/lib/wealth";
 
-export async function getDashboardData() {
+export async function getDashboardData(householdId: number) {
   const months = await prisma.monthlySummary.findMany({
+    where: { householdId },
     orderBy: [{ year: "desc" }, { month: "desc" }],
     take: 12,
     include: {
@@ -15,6 +16,7 @@ export async function getDashboardData() {
   const previous = ordered.at(-2) ?? null;
 
   const goals = await prisma.goal.findMany({
+    where: { householdId },
     orderBy: [{ priority: "asc" }, { id: "asc" }],
   });
 
