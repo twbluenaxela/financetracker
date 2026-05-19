@@ -20,4 +20,4 @@ function getAdminAuth() {
   return getAuth();
 }
 
-export const adminAuth = getAdminAuth();
+export { getAdminAuth as adminAuth };

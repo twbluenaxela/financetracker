@@ -19,7 +19,7 @@ export type SessionUser = {
 };
 
 export async function createSession(idToken: string) {
-  const sessionCookie = await adminAuth.createSessionCookie(idToken, {
+  const sessionCookie = await adminAuth().createSessionCookie(idToken, {
     expiresIn: SESSION_MAX_AGE_MS,
   });
 
@@ -37,8 +37,8 @@ export async function destroySession() {
   const cookieStore = await cookies();
   const session = cookieStore.get(COOKIE_NAME)?.value;
   if (session) {
-    const decoded = await adminAuth.verifySessionCookie(session).catch(() => null);
-    if (decoded) await adminAuth.revokeRefreshTokens(decoded.uid).catch(() => null);
+    const decoded = await adminAuth().verifySessionCookie(session).catch(() => null);
+    if (decoded) await adminAuth().revokeRefreshTokens(decoded.uid).catch(() => null);
   }
   cookieStore.delete(COOKIE_NAME);
 }
@@ -49,7 +49,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   if (!session) return null;
 
   try {
-    const decoded = await adminAuth.verifySessionCookie(session, true);
+    const decoded = await adminAuth().verifySessionCookie(session, true);
     const membership = await getOrCreateHousehold(decoded.uid);
     return {
       uid: decoded.uid,
