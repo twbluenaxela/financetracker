@@ -2854,7 +2854,14 @@ button[type="submit"]:disabled {
   .app { grid-template-columns: 56px 1fr; }
 
   /* ─── sidebar: icon-rail mode ─── */
-  .sidebar { padding-left: 9px; padding-right: 9px; overflow: hidden; }
+  .sidebar {
+    height: 100dvh; /* dvh respects mobile browser chrome */
+    padding-left: 9px; padding-right: 9px;
+    overflow: hidden;
+  }
+  /* nav scrolls so the footer is always pinned at the bottom */
+  .nav { flex: 1; overflow-y: auto; min-height: 0; }
+  .sidebar-foot { flex-shrink: 0; }
   .brand { flex-direction: column; align-items: center; gap: 8px; padding-bottom: 18px; }
   .brand-text { opacity: 0; width: 0; overflow: hidden; }
   .sidebar-toggle { opacity: 1; margin-left: 0; }
@@ -2862,29 +2869,34 @@ button[type="submit"]:disabled {
   .nav-item span { display: none; }
   .nav-item.active::before { left: -9px; }
 
-  /* ─── sidebar-foot: always visible even when JS collapsed state is true ─── */
+  /* ─── sidebar-foot: always visible (override .sidebar-collapsed rule) ─── */
   .sidebar-foot { display: flex !important; gap: 6px; }
   .ledger-card { display: none; }
   .user-pill { padding: 4px 0; justify-content: center; }
   .user-info { display: none; }
   .user-pill .icon-btn { display: none; }
 
-  /* ─── drawer open: sidebar overlays content, no shadow, no backdrop ─── */
+  /* ─── drawer open: panel bg + right border makes it distinct from content ─── */
   .app.mobile-open .sidebar {
     position: fixed;
     left: 0; top: 0; bottom: 0;
-    width: 240px;
-    height: 100vh;
+    width: min(200px, 72vw);
+    height: 100dvh;
     z-index: 200;
-    padding: 22px 16px 18px;
-    overflow: visible;
+    padding: 22px 14px 18px;
+    overflow: hidden; /* keep icon-rail overflow rule while open */
+    background: var(--panel);
+    border-right: 1px solid var(--border-strong);
   }
-  .app.mobile-open .brand { flex-direction: row; align-items: center; gap: 12px; padding-bottom: 22px; }
+  /* nav scrollable inside open drawer so footer stays at bottom */
+  .app.mobile-open .nav { flex: 1; overflow-y: auto; min-height: 0; }
+  .app.mobile-open .sidebar-foot { flex-shrink: 0; }
+  .app.mobile-open .brand { flex-direction: row; align-items: center; gap: 10px; padding-bottom: 20px; }
   .app.mobile-open .brand-text { opacity: 1; width: auto; overflow: visible; }
   .app.mobile-open .sidebar-toggle { margin-left: auto; }
   .app.mobile-open .nav-item { justify-content: flex-start; padding: 9px 10px; }
   .app.mobile-open .nav-item span { display: inline; }
-  .app.mobile-open .nav-item.active::before { left: -16px; }
+  .app.mobile-open .nav-item.active::before { left: -14px; }
   .app.mobile-open .ledger-card { display: flex; }
   .app.mobile-open .user-pill { padding: 4px 6px; justify-content: flex-start; }
   .app.mobile-open .user-info { display: block; }
@@ -2897,6 +2909,13 @@ button[type="submit"]:disabled {
   .topbar { flex-direction: column; align-items: flex-start; gap: 10px; }
   .topbar-actions { width: 100%; flex-wrap: wrap; }
   .page-title { font-size: 20px; }
+
+  /* ─── dashboard hero: stack 本月結餘 above 收入/支出 ─── */
+  .hero { grid-template-columns: 1fr; }
+  .hero-main { padding: 20px 18px; }
+  .hero-figure .amount { font-size: 44px; }
+  .hero-side { border-left: 0; border-top: 1px solid var(--border); grid-template-rows: auto auto; }
+  .hero-stat { padding: 14px 18px; }
 
   /* ─── KPI strip: 2-column ─── */
   .kpi-strip { grid-template-columns: repeat(2, 1fr); }
@@ -2935,6 +2954,9 @@ button[type="submit"]:disabled {
   /* ─── year picker ─── */
   .year-picker { flex-wrap: wrap; }
 
+  /* ─── 理財目標: force goal cards to single column ─── */
+  .tier-grid { grid-template-columns: 1fr; }
+
   /* ─── 三大報表: cashflow summary ─── */
   .cf-summary { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .cf-summary-cell .v { font-size: 14px; }
@@ -2958,36 +2980,50 @@ button[type="submit"]:disabled {
 @media (max-width: 700px) {
   .modal-overlay { padding: 0; align-items: stretch; }
 
+  /* Modal fills screen; scrolls normally instead of clipping */
   .modal.modal-xl {
     max-width: 100%;
-    max-height: 100dvh;
     height: 100dvh;
+    max-height: 100dvh;
     border-radius: 0;
-    border-left: 0;
-    border-right: 0;
-    border-top: 0;
+    border-left: 0; border-right: 0; border-top: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    display: block; /* block scroll instead of flex clip */
   }
 
-  /* header: tighten up */
-  .robo-modal .modal-head { padding: 14px 16px 12px; }
+  /* Header sticky at top while scrolling */
+  .robo-modal .modal-head {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--panel);
+    padding: 12px 16px 10px;
+  }
   .robo-modal .modal-title { font-size: 16px; }
   .robo-modal .modal-sub { display: none; }
 
-  /* risk cards: horizontal scroll row instead of 3-column grid */
+  /* modal-body: normal flex column (overrides display:contents) */
+  .robo-modal .modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 12px 0 32px;
+  }
+
+  /* risk cards: horizontal scroll */
   .robo-risk-row {
     padding: 0 12px;
-    grid-template-columns: repeat(3, minmax(140px, 1fr));
+    grid-template-columns: repeat(3, minmax(130px, 1fr));
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
   .robo-risk-row::-webkit-scrollbar { display: none; }
 
-  /* summary + legend: tighter padding */
+  /* summary + legend */
   .robo-summary { margin: 0 12px; padding: 12px; flex-wrap: wrap; gap: 10px; }
   .robo-legend { padding: 0 12px; flex-wrap: wrap; gap: 8px 14px; }
 
-  /* per-goal table: tighter */
+  /* per-goal table */
   .robo-table { margin: 0 12px; }
   .robo-table-head,
   .robo-row-main { grid-template-columns: 1fr 60px 52px; }
@@ -2996,28 +3032,28 @@ button[type="submit"]:disabled {
   .robo-row-main .robo-row-ret,
   .robo-row-main .robo-row-delta { display: none; }
 
-  /* actions: tighter */
+  /* actions */
   .robo-actions { margin: 0 12px; }
   .robo-actions-head { flex-wrap: wrap; gap: 10px; }
 
-  /* chat: grow to fill, input stays anchored */
+  /* chat: normal height block; thread scrolls internally */
   .robo-chat {
-    margin: 0 12px 12px;
-    flex: 1;
-    min-height: 0;
+    margin: 0 12px 0;
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
+    gap: 12px;
   }
   .robo-chat-thread {
-    flex: 1;
-    max-height: none;
-    min-height: 0;
+    max-height: 220px;
     overflow-y: auto;
   }
-  .robo-chat-suggests { display: none; } /* too cramped on mobile */
+  .robo-chat-suggests { display: none; }
+  /* input sticky at bottom of the scrolling modal */
   .robo-chat-input {
     position: sticky;
     bottom: 0;
     background: var(--panel);
+    z-index: 5;
   }
 }

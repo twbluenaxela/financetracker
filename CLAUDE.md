@@ -80,13 +80,15 @@ app/
     invite/               # POST — generate invite token (owner only)
     invite/[token]/       # POST — accept invite (joins caller to household)
     household/members/[uid]/  # PATCH canEdit, DELETE member (owner only)
+    chat/                 # POST — Gemini multi-turn chat; GET /models — live model list
+
   invite/[token]/         # public invite acceptance page (no auth gate — handles it inline)
   login/                  # public login page
   globals.css             # design tokens + global styles (no Tailwind)
-  layout.tsx              # root layout — loads Google fonts
+  layout.tsx              # root layout — self-hosted fonts via @fontsource npm packages + next/font/local (no network requests)
 
 components/
-  app-shell.tsx           # outer grid (sidebar + main), collapsible sidebar state
+  app-shell.tsx           # outer grid (sidebar + main); desktop collapse + mobile drawer (mobile-open class triggers fixed-position overlay)
   sidebar.tsx             # nav, user pill, logout, collapse toggle
 
 lib/
@@ -195,4 +197,31 @@ BNDW and VT carry `fxRisk: true` (USD-denominated, bought via Schwab wire). 0050
 
 **PFIC constraint** — N cannot hold Taiwan-domiciled ETFs (0050, 00679B, 00720B, etc.); they are PFICs and trigger Form 8621 + up to 37% punitive tax. Only J can hold them. The advisor system prompt encodes this and surfaces warnings in the UI.
 
-- **Robo-advisor** — Gemini API integration for AI financial advice. `GEMINI_API_KEY` is already in env, not yet wired up.
+- **Robo-advisor** — Gemini API integration for AI financial advice. `GEMINI_API_KEY` must be set in env.
+
+## Mobile responsiveness
+
+Target: 400px minimum width. All pages must be usable without horizontal scroll.
+
+**Sidebar drawer (≤640px)**
+- Desktop: sidebar is part of the CSS grid; `sidebar-collapsed` class narrows it.
+- Mobile: `toggle()` in `app-shell.tsx` detects `window.innerWidth <= 640` and toggles `mobileOpen` instead of `collapsed`. The `.app.mobile-open .sidebar` CSS rule switches the sidebar to `position: fixed` overlay (at most `min(200px, 72vw)` wide, `height: 100dvh`, `background: var(--panel)`, `border-right: 1px solid var(--border-strong)`). No backdrop — page content stays visible behind the drawer.
+- `height: 100dvh` (not `100vh`) — respects iOS URL bar and Android nav chrome.
+
+**Sidebar footer always visible**
+- `.nav { flex: 1; overflow-y: auto; min-height: 0; }` — nav scrolls if links overflow.
+- `.sidebar-foot { flex-shrink: 0; display: flex !important; }` — footer pinned at bottom. `!important` is required because `.sidebar-collapsed .sidebar-foot { display: none }` has higher specificity [0,2,0] than the mobile rule [0,1,0].
+
+**Hero stats (dashboard)**
+- `.hero { grid-template-columns: 1fr; }` stacks 本月結餘 above 收入/支出 on narrow screens.
+- `.hero-side { border-left: 0; border-top: 1px solid var(--border); }` separates them visually.
+
+**Goal tier cards**
+- `.tier-grid { grid-template-columns: 1fr; }` overrides the `minmax(310px, 1fr)` auto-fill, forcing single-column vertical stacking.
+
+**Robo-advisor modal (≤700px)**
+- Modal switches to `display: block; overflow-y: auto` (was flex with `overflow: hidden`).
+- `.robo-modal .modal-body` overrides `display: contents` (which removed the scroll container) with `display: flex; flex-direction: column`.
+- Modal header is `position: sticky; top: 0` — always visible while scrolling.
+- Chat input bar is `position: sticky; bottom: 0` — always reachable.
+- Chat thread has `max-height: 220px; overflow-y: auto` — bounded internal scroll.
