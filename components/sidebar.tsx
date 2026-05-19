@@ -30,6 +30,12 @@ const items = [
     label: "理財目標",
     icon: "M12 3v18M3 12h18M12 7l4 5-4 5-4-5z",
   },
+  {
+    id: "investments",
+    href: "/investments",
+    label: "投資",
+    icon: "M3 3v18h18M7 16l4-4 4 4 5-5",
+  },
 ] as const;
 
 function userDisplay(email: string) {
@@ -41,6 +47,7 @@ function activeFromPath(pathname: string) {
   if (pathname.startsWith("/statements")) return "statements";
   if (pathname.startsWith("/months")) return "months";
   if (pathname.startsWith("/goals")) return "goals";
+  if (pathname.startsWith("/investments")) return "investments";
   return "home";
 }
 

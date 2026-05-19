@@ -167,7 +167,7 @@ body {
 .ledger-card:hover { border-color: var(--border-strong); background: var(--panel-hi); }
 .ledger-card.active { border-color: var(--accent); }
 .ledger-card-row { display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
-.ledger-card-title { font-weight: 600; font-size: 14px; margin-top: 4px; }
+.ledger-card-title { font-weight: 600; font-size: 14px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ledger-card-meta { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
 .dot { width: 6px; height: 6px; border-radius: 99px; display: inline-block; }
 .dot-live { background: var(--pos); box-shadow: 0 0 0 3px var(--pos-soft); }
@@ -2876,7 +2876,7 @@ button[type="submit"]:disabled {
   .user-info { display: none; }
   .user-pill .icon-btn { display: none; }
 
-  /* ─── drawer open: panel bg + right border makes it distinct from content ─── */
+  /* ─── drawer open: floats over content, no backdrop ─── */
   .app.mobile-open .sidebar {
     position: fixed;
     left: 0; top: 0; bottom: 0;
@@ -2884,9 +2884,11 @@ button[type="submit"]:disabled {
     height: 100dvh;
     z-index: 200;
     padding: 22px 14px 18px;
-    overflow: hidden; /* keep icon-rail overflow rule while open */
+    overflow-y: auto;
+    overflow-x: hidden;
     background: var(--panel);
     border-right: 1px solid var(--border-strong);
+    box-shadow: 6px 0 32px rgba(0,0,0,0.55);
   }
   /* nav scrollable inside open drawer so footer stays at bottom */
   .app.mobile-open .nav { flex: 1; overflow-y: auto; min-height: 0; }
@@ -2897,7 +2899,7 @@ button[type="submit"]:disabled {
   .app.mobile-open .nav-item { justify-content: flex-start; padding: 9px 10px; }
   .app.mobile-open .nav-item span { display: inline; }
   .app.mobile-open .nav-item.active::before { left: -14px; }
-  .app.mobile-open .ledger-card { display: flex; }
+  .app.mobile-open .ledger-card { display: block; }
   .app.mobile-open .user-pill { padding: 4px 6px; justify-content: flex-start; }
   .app.mobile-open .user-info { display: block; }
   .app.mobile-open .user-pill .icon-btn { display: grid; }
@@ -2956,6 +2958,7 @@ button[type="submit"]:disabled {
 
   /* ─── 理財目標: force goal cards to single column ─── */
   .tier-grid { grid-template-columns: 1fr; }
+  .goals-grid { grid-template-columns: 1fr; }
 
   /* ─── 三大報表: cashflow summary ─── */
   .cf-summary { grid-template-columns: repeat(2, 1fr); gap: 10px; }
@@ -3056,4 +3059,139 @@ button[type="submit"]:disabled {
     background: var(--panel);
     z-index: 5;
   }
+}
+
+/* ============ investments ============ */
+
+/* signal badges */
+.inv-signal {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 99px;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.01em; white-space: nowrap;
+  flex-shrink: 0;
+}
+.inv-signal.signal-buy  { background: var(--pos-soft);  color: var(--pos); }
+.inv-signal.signal-hold { background: var(--panel-hi);  color: var(--muted); border: 1px solid var(--border-strong); }
+.inv-signal.signal-sell { background: var(--neg-soft);  color: var(--neg); }
+
+/* health badge */
+.inv-health {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px; font-weight: 700;
+  padding: 1px 7px; border-radius: 5px; flex-shrink: 0;
+}
+.inv-health-A { background: var(--pos-soft); color: var(--pos); }
+.inv-health-B { background: color-mix(in oklab, var(--warn) 14%, var(--panel)); color: var(--warn); }
+.inv-health-C { background: var(--neg-soft); color: var(--neg); }
+
+/* ticker card */
+.inv-ticker-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 13px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.12s, transform 0.12s;
+  width: 190px; flex-shrink: 0;
+}
+.inv-ticker-card:hover { border-color: var(--border-strong); background: var(--panel-hi); transform: translateY(-1px); }
+.inv-ticker-card.watchlisted { border-color: color-mix(in oklab, var(--warn) 42%, var(--border)); }
+.inv-ticker-sym  { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 14px; }
+.inv-ticker-name { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* carousel */
+.inv-carousel-label {
+  font-size: 10px; font-weight: 700; color: var(--muted);
+  letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 10px;
+}
+.inv-carousel-track {
+  display: flex; gap: 10px;
+  overflow-x: auto; padding-bottom: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.inv-carousel-track::-webkit-scrollbar { height: 3px; }
+.inv-carousel-track::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
+
+/* holdings table */
+.inv-holdings-table { width: 100%; border-collapse: collapse; }
+.inv-holdings-table th {
+  font-size: 10px; font-weight: 700; color: var(--muted);
+  letter-spacing: 0.07em; text-transform: uppercase;
+  padding: 0 8px 10px; text-align: right; white-space: nowrap;
+}
+.inv-holdings-table td {
+  padding: 10px 8px; font-size: 13px;
+  border-top: 1px solid var(--border-soft);
+  vertical-align: middle; text-align: right; white-space: nowrap;
+}
+.inv-holdings-row { cursor: pointer; }
+.inv-holdings-row:hover td { background: var(--panel-row); }
+
+/* alloc bars */
+.inv-alloc-bar {
+  height: 22px; border-radius: 6px; overflow: hidden;
+  display: flex; background: var(--bg-elev);
+}
+.inv-alloc-seg {
+  height: 100%; display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700;
+  color: rgba(0,0,0,0.65); transition: width 0.4s ease;
+  white-space: nowrap; overflow: hidden;
+}
+
+/* watchlist */
+.inv-watchlist-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 0; border-bottom: 1px solid var(--border-soft);
+  cursor: pointer;
+}
+.inv-watchlist-item:last-child { border-bottom: 0; }
+.inv-watchlist-item:hover { background: var(--panel-row); margin: 0 -8px; padding-left: 8px; padding-right: 8px; border-radius: 6px; }
+
+/* advisor banner */
+.inv-advisor-banner {
+  background: linear-gradient(135deg, var(--accent-soft), var(--panel));
+  border: 1px solid color-mix(in oklab, var(--accent) 28%, var(--border));
+  border-radius: var(--radius);
+  padding: 18px 22px;
+  display: flex; align-items: center; gap: 16px;
+}
+
+/* detail drawer */
+.inv-drawer-bg {
+  position: fixed; inset: 0; z-index: 199;
+  background: rgba(0,0,0,0.38);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+.inv-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 420px;
+  background: var(--panel);
+  border-left: 1px solid var(--border-strong);
+  display: flex; flex-direction: column;
+  z-index: 200;
+  box-shadow: -24px 0 64px -12px rgba(0,0,0,0.6);
+  transform: translateX(110%);
+  transition: transform 0.28s cubic-bezier(.4,0,.2,1);
+  overflow: hidden;
+}
+.inv-drawer.open { transform: translateX(0); }
+.inv-drawer-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* mobile adjustments */
+@media (max-width: 640px) {
+  .inv-drawer { width: 100vw; }
+  .inv-holdings-table th:nth-child(3),
+  .inv-holdings-table td:nth-child(3),
+  .inv-holdings-table th:nth-child(4),
+  .inv-holdings-table td:nth-child(4) { display: none; }
+  .inv-advisor-banner { flex-direction: column; align-items: flex-start; }
 }

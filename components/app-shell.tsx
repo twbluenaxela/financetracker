@@ -46,7 +46,13 @@ export function AppShell({
 
   return (
     <div className={`app${collapsed ? " sidebar-collapsed" : ""}${mobileOpen ? " mobile-open" : ""}`}>
-
+      {mobileOpen && (
+        <div
+          aria-hidden="true"
+          style={{ position: "fixed", inset: 0, zIndex: 199 }}
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
       <Sidebar user={user} householdName={householdName} memberCount={memberCount} collapsed={collapsed} onToggle={toggle} />
       <main className="main">{children}</main>
     </div>
