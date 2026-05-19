@@ -38,28 +38,41 @@ const fmtCompact = (n: number) => {
 
 function YearPicker({
   year,
-  years,
+  minYear,
+  maxYear,
   countByYear,
   onPick,
 }: {
   year: number;
-  years: number[];
+  minYear: number;
+  maxYear: number;
   countByYear: Record<number, number>;
   onPick: (year: number) => void;
 }) {
   return (
     <div className="year-picker">
-      {years.map((y) => (
-        <button
-          key={y}
-          type="button"
-          className={`year-pill ${y === year ? "active" : ""}`}
-          onClick={() => onPick(y)}
-        >
-          {y}
-          <span className="year-pill-sub">{countByYear[y] ?? 0}/12</span>
-        </button>
-      ))}
+      <button
+        type="button"
+        className="year-nav-btn"
+        onClick={() => onPick(year - 1)}
+        disabled={year <= minYear}
+        aria-label="Previous year"
+      >
+        ‹
+      </button>
+      <span className="year-nav-label">
+        {year}
+        <span className="year-pill-sub">{countByYear[year] ?? 0}/12</span>
+      </span>
+      <button
+        type="button"
+        className="year-nav-btn"
+        onClick={() => onPick(year + 1)}
+        disabled={year >= maxYear}
+        aria-label="Next year"
+      >
+        ›
+      </button>
     </div>
   );
 }
@@ -354,7 +367,13 @@ export function MonthsView({
   currentMonth: number;
 }) {
   const currentKey = monthLabel(currentYear, currentMonth);
-  const years = useMemo(() => Array.from(new Set(months.map((m) => m.year))).sort((a, b) => a - b), [months]);
+  const { minYear, maxYear } = useMemo(() => {
+    const existing = months.map((m) => m.year);
+    return {
+      minYear: Math.min(currentYear - 5, ...(existing.length ? existing : [currentYear])),
+      maxYear: Math.max(currentYear, ...(existing.length ? existing : [currentYear])),
+    };
+  }, [months, currentYear]);
   const countByYear = useMemo(
     () =>
       months.reduce<Record<number, number>>((acc, month) => {
@@ -364,7 +383,7 @@ export function MonthsView({
     [months],
   );
 
-  const [year, setYear] = useState<number>(years.at(-1) ?? currentYear);
+  const [year, setYear] = useState<number>(currentYear);
   const [activeKey, setActiveKey] = useState<string>(currentKey);
   const router = useRouter();
 
@@ -391,7 +410,7 @@ export function MonthsView({
           <div className="topbar-sub muted">紀錄每月共享帳本的總收支與分類明細</div>
         </div>
         <div className="topbar-actions">
-          <YearPicker year={year} years={years} countByYear={countByYear} onPick={setYear} />
+          <YearPicker year={year} minYear={minYear} maxYear={maxYear} countByYear={countByYear} onPick={setYear} />
           <button className="btn btn-ghost" type="button">匯出</button>
           <button className="btn btn-primary" type="button" onClick={() => router.push("/months/new")}>新增月份</button>
         </div>
