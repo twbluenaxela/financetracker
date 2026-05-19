@@ -25,13 +25,11 @@ export function AppShell({
   householdName: string;
   memberCount: number;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("sidebar-collapsed") === "1";
+  });
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem("sidebar-collapsed");
-    if (stored === "1") setCollapsed(true);
-  }, []);
 
   function toggle() {
     if (window.innerWidth <= 640) {

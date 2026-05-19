@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { StatementBundle, StatementMonth } from "@/lib/statements";
 import { compactMoney, monthChinese, monthLabel, money } from "@/lib/statements";
 
@@ -361,12 +361,12 @@ function CategoryHeatmap({ months, activeIdx }: { months: StatementMonth[]; acti
         {incCats.map((cat) => {
           const rowTotal = months.reduce((a, m) => a + cellFor(m, cat, "income"), 0);
           return (
-            <>
-              <div key={`il-${cat}`} className="hm-row-label income">
+            <React.Fragment key={cat}>
+              <div className="hm-row-label income">
                 <span className="swatch" style={{ background: "var(--accent)" }}></span>
                 <span className="name">{cat}</span>
               </div>
-              <div key={`ir-${cat}`} className="hm-row" style={{ gridTemplateColumns: monthCols }}>
+              <div className="hm-row" style={{ gridTemplateColumns: monthCols }}>
                 {months.map((m, mi) => {
                   const v = cellFor(m, cat, "income");
                   const dense = v / maxInc > 0.35;
@@ -388,8 +388,8 @@ function CategoryHeatmap({ months, activeIdx }: { months: StatementMonth[]; acti
                   );
                 })}
               </div>
-              <div key={`it-${cat}`} className="hm-total">{compactMoney(rowTotal)}</div>
-            </>
+              <div className="hm-total">{compactMoney(rowTotal)}</div>
+            </React.Fragment>
           );
         })}
 
@@ -407,13 +407,13 @@ function CategoryHeatmap({ months, activeIdx }: { months: StatementMonth[]; acti
           const rowTotal = months.reduce((a, m) => a + cellFor(m, cat, "expense"), 0);
           const isUncat = cat === "未分類";
           return (
-            <>
-              <div key={`el-${cat}`} className={`hm-row-label expense${isUncat ? " uncat" : ""}`}>
+            <React.Fragment key={cat}>
+              <div className={`hm-row-label expense${isUncat ? " uncat" : ""}`}>
                 <span className="swatch" style={{ background: isUncat ? "var(--warn)" : "var(--neg)" }}></span>
                 <span className="name">{cat}</span>
                 {isUncat && <span className="cat-flag" style={{ marginLeft: "auto" }}>未指派</span>}
               </div>
-              <div key={`er-${cat}`} className="hm-row" style={{ gridTemplateColumns: monthCols }}>
+              <div className="hm-row" style={{ gridTemplateColumns: monthCols }}>
                 {months.map((m, mi) => {
                   const v = cellFor(m, cat, "expense");
                   const dense = v / maxExp > 0.35;
@@ -435,8 +435,8 @@ function CategoryHeatmap({ months, activeIdx }: { months: StatementMonth[]; acti
                   );
                 })}
               </div>
-              <div key={`et-${cat}`} className="hm-total">{compactMoney(rowTotal)}</div>
-            </>
+              <div className="hm-total">{compactMoney(rowTotal)}</div>
+            </React.Fragment>
           );
         })}
 

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type GoalView = {
   id: number;
@@ -1491,7 +1493,11 @@ function RoboAdvisorModal({ goals, surplus, income, expense, onClose }: { goals:
                     </svg>
                   </span>
                 )}
-                <div className="robo-chat-bubble">{m.text}</div>
+                <div className="robo-chat-bubble">
+                  {m.role === "advisor" && !m.error
+                    ? <div className="md-chat"><Markdown remarkPlugins={[remarkGfm]}>{m.text}</Markdown></div>
+                    : m.text}
+                </div>
               </div>
             ))}
             {busy && (
