@@ -57,7 +57,7 @@ body {
   transition: grid-template-columns 0.22s ease;
 }
 .app.sidebar-collapsed {
-  grid-template-columns: 56px 1fr;
+  grid-template-columns: 68px 1fr;
 }
 
 /* ============ sidebar ============ */
@@ -105,17 +105,21 @@ body {
 
 /* collapsed state */
 .sidebar-collapsed .sidebar {
-  padding-left: 9px;
-  padding-right: 9px;
+  padding-left: 12px;
+  padding-right: 12px;
   overflow: hidden;
 }
-.sidebar-collapsed .brand { flex-direction: column; align-items: center; gap: 8px; padding-bottom: 18px; }
-.sidebar-collapsed .brand-text { opacity: 0; width: 0; overflow: hidden; }
-.sidebar-collapsed .sidebar-toggle { opacity: 1; margin-left: 0; }
+.sidebar-collapsed .brand { flex-direction: column; align-items: center; gap: 6px; padding: 4px 0 18px; }
+.sidebar-collapsed .brand-text { display: none; }
+.sidebar-collapsed .sidebar-toggle { opacity: 1; margin: 0; }
 .sidebar-collapsed .nav-item { justify-content: center; padding: 10px 0; }
 .sidebar-collapsed .nav-item span { display: none; }
 .sidebar-collapsed .nav-item.active::before { left: -9px; }
-.sidebar-collapsed .sidebar-foot { display: none; }
+.sidebar-collapsed .sidebar-foot { display: flex; }
+.sidebar-collapsed .ledger-card { display: none; }
+.sidebar-collapsed .user-pill { padding: 4px 0; justify-content: center; border-color: transparent; background: transparent; }
+.sidebar-collapsed .user-info { display: none; }
+.sidebar-collapsed .user-pill .icon-btn { display: none; }
 
 .nav { display: flex; flex-direction: column; gap: 2px; }
 .nav-item {
