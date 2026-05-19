@@ -26,22 +26,27 @@ export function AppShell({
   memberCount: number;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  // persist across page loads
   useEffect(() => {
     const stored = localStorage.getItem("sidebar-collapsed");
     if (stored === "1") setCollapsed(true);
   }, []);
 
   function toggle() {
-    setCollapsed((prev) => {
-      localStorage.setItem("sidebar-collapsed", prev ? "0" : "1");
-      return !prev;
-    });
+    if (window.innerWidth <= 640) {
+      setMobileOpen((prev) => !prev);
+    } else {
+      setCollapsed((prev) => {
+        localStorage.setItem("sidebar-collapsed", prev ? "0" : "1");
+        return !prev;
+      });
+    }
   }
 
   return (
-    <div className={`app${collapsed ? " sidebar-collapsed" : ""}`}>
+    <div className={`app${collapsed ? " sidebar-collapsed" : ""}${mobileOpen ? " mobile-open" : ""}`}>
+
       <Sidebar user={user} householdName={householdName} memberCount={memberCount} collapsed={collapsed} onToggle={toggle} />
       <main className="main">{children}</main>
     </div>

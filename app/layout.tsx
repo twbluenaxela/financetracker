@@ -1,21 +1,27 @@
 import "./globals.css";
 import type { ReactNode } from "react";
-import { JetBrains_Mono, Manrope, Noto_Sans_TC } from "next/font/google";
+import localFont from "next/font/local";
 
-const manrope = Manrope({
-  subsets: ["latin"],
+const manrope = localFont({
+  src: "../node_modules/@fontsource-variable/manrope/files/manrope-latin-wght-normal.woff2",
   variable: "--font-sans",
+  display: "swap",
 });
 
-const notoSansTc = Noto_Sans_TC({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+const notoSansTc = localFont({
+  src: [
+    { path: "../node_modules/@fontsource/noto-sans-tc/files/noto-sans-tc-chinese-traditional-400-normal.woff2", weight: "400" },
+    { path: "../node_modules/@fontsource/noto-sans-tc/files/noto-sans-tc-chinese-traditional-500-normal.woff2", weight: "500" },
+    { path: "../node_modules/@fontsource/noto-sans-tc/files/noto-sans-tc-chinese-traditional-700-normal.woff2", weight: "700" },
+  ],
   variable: "--font-cjk",
+  display: "swap",
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
+const jetbrainsMono = localFont({
+  src: "../node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2",
   variable: "--font-mono",
+  display: "swap",
 });
 
 export const metadata = {

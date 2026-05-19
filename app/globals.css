@@ -34,7 +34,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
 body {
-  font-family: "Manrope", "Noto Sans TC", system-ui, -apple-system, sans-serif;
+  font-family: "Manrope", "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", system-ui, -apple-system, sans-serif;
   font-feature-settings: "ss01", "cv11";
   font-size: 14px;
   line-height: 1.45;
@@ -2843,3 +2843,181 @@ button[type="submit"]:disabled {
   border-top: 1px solid var(--border-soft);
 }
 .cd-meta strong { color: var(--text); font-family: "JetBrains Mono", monospace; font-weight: 600; font-feature-settings: "tnum"; }
+
+/* ============================================================
+   MOBILE  (≤ 640px)
+   Sidebar collapses to 56px icon rail. Content fills the rest.
+   ============================================================ */
+@media (max-width: 640px) {
+
+  /* ─── layout: sidebar always icon-rail ─── */
+  .app { grid-template-columns: 56px 1fr; }
+
+  /* ─── sidebar: icon-rail mode ─── */
+  .sidebar { padding-left: 9px; padding-right: 9px; overflow: hidden; }
+  .brand { flex-direction: column; align-items: center; gap: 8px; padding-bottom: 18px; }
+  .brand-text { opacity: 0; width: 0; overflow: hidden; }
+  .sidebar-toggle { opacity: 1; margin-left: 0; }
+  .nav-item { justify-content: center; padding: 10px 0; }
+  .nav-item span { display: none; }
+  .nav-item.active::before { left: -9px; }
+
+  /* ─── sidebar-foot: always visible even when JS collapsed state is true ─── */
+  .sidebar-foot { display: flex !important; gap: 6px; }
+  .ledger-card { display: none; }
+  .user-pill { padding: 4px 0; justify-content: center; }
+  .user-info { display: none; }
+  .user-pill .icon-btn { display: none; }
+
+  /* ─── drawer open: sidebar overlays content, no shadow, no backdrop ─── */
+  .app.mobile-open .sidebar {
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    width: 240px;
+    height: 100vh;
+    z-index: 200;
+    padding: 22px 16px 18px;
+    overflow: visible;
+  }
+  .app.mobile-open .brand { flex-direction: row; align-items: center; gap: 12px; padding-bottom: 22px; }
+  .app.mobile-open .brand-text { opacity: 1; width: auto; overflow: visible; }
+  .app.mobile-open .sidebar-toggle { margin-left: auto; }
+  .app.mobile-open .nav-item { justify-content: flex-start; padding: 9px 10px; }
+  .app.mobile-open .nav-item span { display: inline; }
+  .app.mobile-open .nav-item.active::before { left: -16px; }
+  .app.mobile-open .ledger-card { display: flex; }
+  .app.mobile-open .user-pill { padding: 4px 6px; justify-content: flex-start; }
+  .app.mobile-open .user-info { display: block; }
+  .app.mobile-open .user-pill .icon-btn { display: grid; }
+
+  /* ─── main content ─── */
+  .main { padding: 18px 14px 48px; gap: 14px; overflow-x: hidden; }
+
+  /* ─── topbar ─── */
+  .topbar { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .topbar-actions { width: 100%; flex-wrap: wrap; }
+  .page-title { font-size: 20px; }
+
+  /* ─── KPI strip: 2-column ─── */
+  .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+  .kpi-tile { border-right: 0; border-bottom: 1px solid var(--border); }
+  .kpi-tile:nth-child(odd) { border-right: 1px solid var(--border); }
+  .kpi-tile:nth-last-child(-n+2):nth-child(odd),
+  .kpi-tile:last-child { border-bottom: 0; }
+  .kpi-val { font-size: 17px; }
+
+  /* ─── 每月收支: year grid ─── */
+  .year-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .month-tile { min-height: 90px; padding: 8px 8px 6px; gap: 4px; }
+  .mt-num { font-size: 11px; }
+  .mt-figure { font-size: 11px; }
+  .mt-meta { display: none; }
+  .now-pill { display: none; }
+
+  /* ─── 每月收支: month editor ─── */
+  .editor-card { padding: 16px; }
+  .editor-head { grid-template-columns: 1fr; gap: 12px; padding-bottom: 14px; margin-bottom: 14px; }
+  .editor-title { font-size: 20px; white-space: normal; }
+  .editor-title-sub { white-space: normal; }
+  .editor-stats { border-left: 0; padding-left: 0; padding-top: 10px; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 14px; }
+  .editor-stat-val { font-size: 15px; }
+  .editor-actions { width: 100%; justify-content: flex-end; }
+
+  /* ─── 每月收支: breakdown panels ─── */
+  .bd-head { flex-wrap: wrap; gap: 8px; }
+  .bd-total { width: 100%; flex-direction: row; justify-content: space-between; align-items: center; }
+  .bd-total-input input { width: 80px; }
+  .cat-edit-row { grid-template-columns: 1fr auto; gap: 6px; }
+  .cat-edit-act { display: none; }
+  .cat-edit-amt input { width: 80px; }
+  .bd-foot { flex-wrap: wrap; gap: 4px 14px; }
+
+  /* ─── year picker ─── */
+  .year-picker { flex-wrap: wrap; }
+
+  /* ─── 三大報表: cashflow summary ─── */
+  .cf-summary { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .cf-summary-cell .v { font-size: 14px; }
+
+  /* ─── 三大報表: heatmap — horizontally scrollable ─── */
+  .hm-outer { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .hm-wrap { min-width: 480px; }
+
+  /* ─── 三大報表: P&L table ─── */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .pnl-table { min-width: 420px; }
+  .pnl-table th, .pnl-table td { padding: 10px 10px; }
+}
+
+/* ============================================================
+   ROBO-ADVISOR MODAL  (≤ 700px)
+   Full-screen sheet: fills entire viewport, no border-radius,
+   chat section expands to fill remaining space, input sticks
+   to bottom so the keyboard doesn't bury it.
+   ============================================================ */
+@media (max-width: 700px) {
+  .modal-overlay { padding: 0; align-items: stretch; }
+
+  .modal.modal-xl {
+    max-width: 100%;
+    max-height: 100dvh;
+    height: 100dvh;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    border-top: 0;
+  }
+
+  /* header: tighten up */
+  .robo-modal .modal-head { padding: 14px 16px 12px; }
+  .robo-modal .modal-title { font-size: 16px; }
+  .robo-modal .modal-sub { display: none; }
+
+  /* risk cards: horizontal scroll row instead of 3-column grid */
+  .robo-risk-row {
+    padding: 0 12px;
+    grid-template-columns: repeat(3, minmax(140px, 1fr));
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .robo-risk-row::-webkit-scrollbar { display: none; }
+
+  /* summary + legend: tighter padding */
+  .robo-summary { margin: 0 12px; padding: 12px; flex-wrap: wrap; gap: 10px; }
+  .robo-legend { padding: 0 12px; flex-wrap: wrap; gap: 8px 14px; }
+
+  /* per-goal table: tighter */
+  .robo-table { margin: 0 12px; }
+  .robo-table-head,
+  .robo-row-main { grid-template-columns: 1fr 60px 52px; }
+  .robo-table-head span:nth-child(3),
+  .robo-table-head span:nth-child(5),
+  .robo-row-main .robo-row-ret,
+  .robo-row-main .robo-row-delta { display: none; }
+
+  /* actions: tighter */
+  .robo-actions { margin: 0 12px; }
+  .robo-actions-head { flex-wrap: wrap; gap: 10px; }
+
+  /* chat: grow to fill, input stays anchored */
+  .robo-chat {
+    margin: 0 12px 12px;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .robo-chat-thread {
+    flex: 1;
+    max-height: none;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .robo-chat-suggests { display: none; } /* too cramped on mobile */
+  .robo-chat-input {
+    position: sticky;
+    bottom: 0;
+    background: var(--panel);
+  }
+}

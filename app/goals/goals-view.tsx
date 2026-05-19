@@ -1145,7 +1145,7 @@ function RoboAdvisorModal({ goals, surplus, income, expense, onClose }: { goals:
       "",
       "【家庭背景】",
       "- N：持有美國護照，居住台灣，透過 Charles Schwab 券商投資美國掛牌 ETF，匯款方式為台灣銀行電匯美元至 Schwab",
-      "- J：台灣公民，使用台灣券商帳戶投資台股與台灣債券 ETF",
+      "- J：台灣籍，使用台灣券商帳戶投資台股與台灣債券 ETF",
       "- 家庭日常收支以 TWD 計算",
       "",
       "【投資限制 — 極重要】",

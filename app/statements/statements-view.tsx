@@ -334,6 +334,7 @@ function CategoryHeatmap({ months, activeIdx }: { months: StatementMonth[]; acti
         </div>
       </div>
 
+      <div className="hm-outer">
       <div className="hm-wrap" style={{ gridTemplateColumns: "170px 1fr 96px" }}>
         {/* Header row */}
         <div className="hm-corner tl">分類</div>
@@ -457,6 +458,7 @@ function CategoryHeatmap({ months, activeIdx }: { months: StatementMonth[]; acti
           ))}
         </div>
         <div className="hm-foot-total" style={{ color: "var(--pos)" }}>{compactMoney(colSurplus.reduce((a, b) => a + b, 0))}</div>
+      </div>
       </div>
     </div>
   );

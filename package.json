@@ -11,6 +11,9 @@
     "prisma:migrate": "prisma migrate dev"
   },
   "dependencies": {
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@fontsource-variable/manrope": "^5.2.8",
+    "@fontsource/noto-sans-tc": "^5.2.9",
     "@google/genai": "^1.13.0",
     "@node-rs/argon2": "^2.0.2",
     "@prisma/client": "^5.22.0",
