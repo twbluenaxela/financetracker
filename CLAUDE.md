@@ -69,7 +69,7 @@ app/
     page.tsx              # dashboard
     months/               # monthly cash flow list + new/edit forms
     goals/                # savings goals
-    statements/           # three-statement financial view
+    statements/           # 財務報表 — interactive financial reports (client component)
     settings/             # household settings — members, permissions, invite links
   api/
     auth/login/           # POST — exchange Firebase ID token for session cookie
@@ -96,7 +96,7 @@ lib/
   firebase-admin.ts       # admin SDK init (server-only)
   prisma.ts               # Prisma singleton
   dashboard.ts            # getDashboardData(householdId)
-  statements.ts           # StatementBundle builder + formatting helpers
+  statements.ts           # StatementBundle builder + formatting helpers (buildStatements, money, compactMoney)
   wealth.ts               # goal PMT calculation + money formatters
   invest.ts               # blended return, growth schedules, allocation recommender
 
@@ -109,7 +109,7 @@ fly.toml                  # Fly.io config — app: financetrackertw, region: nrt
 
 ## Key conventions
 
-- **Server components by default.** Client components are `"use client"` and live in `*-view.tsx` or `*-form.tsx` files alongside their server page.
+- **Server components by default.** Client components are `"use client"` and live in `*-view.tsx` or `*-form.tsx` files alongside their server page. Exception: `statements-view.tsx` is a client component because the reports page has rich interactivity (period switcher, chart clicks, heatmap hover).
 - **Auth pattern:** server pages call `requireUser()` (redirects to /login if no session); API routes call `getSessionUser()` and return 401.
 - **Household scoping:** every Prisma query on financial data (`MonthlySummary`, `Goal`, `InvestmentPlan`) must include `where: { householdId: user.householdId }`. Never query without it.
 - **Permission check:** mutation API routes check `user.canEdit` (or `user.role === "owner"` for admin actions) before touching the DB.
@@ -140,6 +140,59 @@ Every user belongs to exactly one household. On first login, `getOrCreateHouseho
 
 Invite links are one-time-use, 7-day tokens stored in `household_invites`. They are valid across Fly machine restarts because the token lives in Neon, not in memory.
 
-## Planned features
+## 財務報表 page (`/statements`)
+
+The reports page (`app/statements/`) is a fully client-side interactive view built on top of `StatementBundle` data fetched server-side in `page.tsx`.
+
+**Sections:**
+- **KPI strip** — 5 tiles: 期間收入 / 期間支出 / 期間結餘 (with half-period trend) / 儲蓄率 / 淨值
+- **現金流** — twin-bar SVG chart (income up, expense down from midline) with cumulative cash line overlay; click any bar to set the active month
+- **分類 × 月份** — heatmap grid; income rows (mint intensity) and expense rows (coral intensity); hover cells for tooltip with amount + share of month; footer rows show monthly totals and surplus
+- **損益表** — scrollable table grouped by year; savings-rate mini bar per row; click row to set active month
+- **資產負債表** — net worth callout with sparkline trajectory back-projected from `data.months`; composition bar; assets vs liabilities breakdown
+- **支出深度分析** — top-8 expense category cards with sparklines and MoM delta
+
+**Period switcher** (滾動 12M / 2026 YTD / 2025) filters all sections client-side from the full `data.months` array.
+
+**Data shape** — all sections consume `StatementMonth[]` which already carries `incomeLines` / `expenseLines` per month (populated by `buildStatements` from Prisma `MonthlySummary.lines`). No extra API calls needed.
+
+## 理財目標 page (`/goals`)
+
+The goals page pairs a React Server Component (`app/(protected)/goals/page.tsx`) with a large client component (`app/goals/goals-view.tsx`). The server component fetches all goals and the latest `MonthlySummary`, then passes `{ goals, income, expense, surplus }` as props.
+
+**Features:**
+- Goals grouped into three tiers: 短期 (<1yr) / 中期 (1–5yr) / 長期 (5+yr)
+- Drag-handle allocator distributes monthly surplus across tiers (default 50/30/20)
+- Per-goal sliders to adjust monthly contribution; ETA recalculates in real time
+- Add / edit / delete goals via modal forms + `/api/goals` route
+- **Robo-advisor modal** — see section below
+
+**Robo-advisor** (`RoboAdvisorModal` inside `goals-view.tsx`):
+
+*Asset universe* — `ASSETS` constant, four slots:
+
+| ID | Name | Ticker | Return | Currency | Who |
+|----|------|--------|--------|----------|-----|
+| `cash` | 定存/活存 | 台灣銀行 | 1.8% | TWD | Anyone |
+| `bond` | 全球債券 ETF | BNDW | 3.5% | USD | You (Schwab) |
+| `world` | 全球股市 ETF | VT | 7.9% | USD | You (Schwab) |
+| `twStock` | 台股市值型 ETF | 0050 | 7.5% | TWD | Wife only |
+
+BNDW and VT carry `fxRisk: true` (USD-denominated, bought via Schwab wire). 0050 is PFIC for N — tagged in the UI and warned in the advisor chat.
+
+*Allocation recipes* — `RECIPES` constant, Boglehead-grounded:
+- 短期: conservative/moderate = 100% cash; aggressive = 85% cash / 15% bond
+- 中期: conservative = 20/45/25/10; moderate = 10/25/50/15; aggressive = 5/10/65/20
+- 長期: conservative = 35% bond / 50% VT / 15% 0050; moderate = 15/70/15; aggressive = 5/80/15
+
+*Gemini chat* (`POST /api/chat`):
+- Request shape: `{ system: string, history: { role: "user"|"model", text: string }[], model: string }`
+- `system` is the full household briefing (profile, PFIC rules, asset universe, costs, philosophy) — sent as `config.systemInstruction`, not part of the chat history
+- `history` is the **full conversation** so the model has multi-turn memory; error messages are stripped before sending
+- The financial context snapshot (income, expenses, surplus, all goal amounts + recommended mixes) is injected as a `<context>` block prepended to the first user message only — not repeated on every turn
+- Model list fetched live at modal open from `GET /api/chat/models`; static fallback list if fetch fails
+- Default model: `gemini-3-flash-preview`
+
+**PFIC constraint** — N cannot hold Taiwan-domiciled ETFs (0050, 00679B, 00720B, etc.); they are PFICs and trigger Form 8621 + up to 37% punitive tax. Only J can hold them. The advisor system prompt encodes this and surfaces warnings in the UI.
 
 - **Robo-advisor** — Gemini API integration for AI financial advice. `GEMINI_API_KEY` is already in env, not yet wired up.

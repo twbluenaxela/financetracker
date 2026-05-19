@@ -100,31 +100,53 @@ function CashflowChart({ months, activeIdx, onPick }: {
   onPick: (i: number) => void;
 }) {
   const [hover, setHover] = useState<number | null>(null);
+  if (!months.length) return null;
 
-  const H = 280;
-  const mid = H / 2;
+  const H = 300, mid = H / 2;
   const N = months.length;
-  const slotW = N > 0 ? 100 / N : 100;
-  const barW = slotW * 0.30;
-  const max = Math.max(...months.flatMap((m) => [m.income, m.expense]), 1);
+  const slotW = 100 / N;
+  const barW = slotW * 0.32;
+  const halfH = mid - 14;
+
+  const rawMax = Math.max(...months.flatMap((m) => [m.income, m.expense]), 1);
+  const axisMax = Math.ceil(rawMax / 20000) * 20000;
 
   let cum = 0;
   const cumPoints = months.map((m) => { cum += m.surplus; return cum; });
-  const cumMax = Math.max(...cumPoints.map((v) => Math.abs(v)), 1);
-  const cumToY = (v: number) => mid - (v / cumMax) * (mid - 18);
+  const cumMin = Math.min(0, ...cumPoints);
+  const cumMax = Math.max(0, ...cumPoints);
+  const cumRange = Math.max(cumMax - cumMin, 1);
+  const cumToY = (v: number) => H - 18 - ((v - cumMin) / cumRange) * (H - 36);
+  const xOf = (i: number) => slotW * i + slotW / 2;
 
-  const linePath = cumPoints.map((v, i) => {
-    const x = slotW * i + slotW / 2;
-    return `${i === 0 ? "M" : "L"} ${x} ${cumToY(v)}`;
-  }).join(" ");
-
-  const areaPath = N > 0
-    ? `M ${slotW / 2} ${mid} ` +
-      cumPoints.map((v, i) => `L ${slotW * i + slotW / 2} ${cumToY(v)}`).join(" ") +
-      ` L ${slotW * (N - 1) + slotW / 2} ${mid} Z`
+  // Catmull-Rom → cubic Bezier smoothed cumulative line
+  const pts = cumPoints.map((v, i) => ({ x: xOf(i), y: cumToY(v) }));
+  let linePath = "";
+  if (pts.length > 0) {
+    linePath = `M ${pts[0]!.x} ${pts[0]!.y}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i - 1] ?? pts[i]!;
+      const p1 = pts[i]!;
+      const p2 = pts[i + 1]!;
+      const p3 = pts[i + 2] ?? p2;
+      const t = 0.18;
+      const c1x = p1.x + (p2.x - p0.x) * t;
+      const c1y = p1.y + (p2.y - p0.y) * t;
+      const c2x = p2.x - (p3.x - p1.x) * t;
+      const c2y = p2.y - (p3.y - p1.y) * t;
+      linePath += ` C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2.x} ${p2.y}`;
+    }
+  }
+  const baselineY = cumToY(0);
+  const areaPath = pts.length > 0
+    ? `M ${pts[0]!.x} ${baselineY} L ${linePath.slice(2)} L ${pts[pts.length - 1]!.x} ${baselineY} Z`
     : "";
 
-  if (!months.length) return null;
+  const totalIncome  = months.reduce((a, m) => a + m.income, 0);
+  const totalExpense = months.reduce((a, m) => a + m.expense, 0);
+  const totalSurplus = totalIncome - totalExpense;
+  const avgSavings   = totalIncome > 0 ? (totalSurplus / totalIncome) * 100 : 0;
+  const endCum       = cumPoints.length > 0 ? cumPoints[cumPoints.length - 1]! : 0;
 
   return (
     <div className="card cf-card">
@@ -134,65 +156,126 @@ function CashflowChart({ months, activeIdx, onPick }: {
           <div className="card-sub muted">每月收入 vs 支出 · 累積現金以藍線疊加 · 點擊月份查看細節</div>
         </div>
         <div className="cf-legend">
-          <span><span className="bar bar-income"></span>收入</span>
-          <span><span className="bar bar-expense"></span>支出</span>
+          <span><span className="cf-legend-sw income"></span>收入</span>
+          <span><span className="cf-legend-sw expense"></span>支出</span>
           <span><span className="cf-legend-line"></span>累積現金</span>
         </div>
       </div>
-      <div className="chart-wrap">
-        <div className="chart-axis" style={{ padding: "2px 0 22px" }}>
-          <span>{compactMoney(max)}</span>
-          <span>{compactMoney(max / 2)}</span>
-          <span>0</span>
-          <span>{compactMoney(max / 2)}</span>
-          <span>{compactMoney(max)}</span>
+
+      <div className="cf-wrap">
+        <div className="cf-yaxis">
+          <span>{compactMoney(axisMax)}</span>
+          <span>{compactMoney(axisMax / 2)}</span>
+          <span className="zero">0</span>
+          <span className="neg">-{compactMoney(axisMax / 2)}</span>
+          <span className="neg">-{compactMoney(axisMax)}</span>
         </div>
-        <div className="chart-area">
+
+        <div className="cf-chart">
           <svg viewBox={`0 0 100 ${H}`} preserveAspectRatio="none" className="cf-svg">
-            <line className="chart-grid" x1="0" x2="100" y1={mid - mid * 0.5} y2={mid - mid * 0.5}/>
-            <line className="chart-grid" x1="0" x2="100" y1={mid + mid * 0.5} y2={mid + mid * 0.5}/>
-            <line className="chart-mid" x1="0" x2="100" y1={mid} y2={mid}/>
+            <defs>
+              <linearGradient id="cf-grad-income" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stopColor="var(--accent)" stopOpacity="0.95"/>
+                <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.35"/>
+              </linearGradient>
+              <linearGradient id="cf-grad-expense" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stopColor="var(--neg)" stopOpacity="0.35"/>
+                <stop offset="100%" stopColor="var(--neg)" stopOpacity="0.95"/>
+              </linearGradient>
+              <linearGradient id="cf-grad-cum" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stopColor="var(--info)" stopOpacity="0.22"/>
+                <stop offset="100%" stopColor="var(--info)" stopOpacity="0"/>
+              </linearGradient>
+            </defs>
+
+            <line className="cf-grid" x1="0" x2="100" y1={mid - halfH}         y2={mid - halfH}/>
+            <line className="cf-grid" x1="0" x2="100" y1={mid - halfH * 0.5}   y2={mid - halfH * 0.5}/>
+            <line className="cf-grid" x1="0" x2="100" y1={mid + halfH * 0.5}   y2={mid + halfH * 0.5}/>
+            <line className="cf-grid" x1="0" x2="100" y1={mid + halfH}         y2={mid + halfH}/>
+            <line className="cf-mid"  x1="0" x2="100" y1={mid}                 y2={mid}/>
+
             <path d={areaPath} className="cf-cum-area"/>
             <path d={linePath} className="cf-cum-line"/>
+
             {months.map((m, i) => {
-              const cx = slotW * i + slotW / 2;
-              const ih = Math.max(0, (m.income / max) * (mid - 10));
-              const eh = Math.max(0, (m.expense / max) * (mid - 10));
+              const cx = xOf(i);
+              const ih = Math.max(0, ((m.income)  / axisMax) * halfH);
+              const eh = Math.max(0, ((m.expense) / axisMax) * halfH);
               const isActive = i === activeIdx;
-              const isHover = i === hover;
+              const isHover  = i === hover;
               return (
                 <g key={i}
                    onMouseEnter={() => setHover(i)}
                    onMouseLeave={() => setHover(null)}
                    onClick={() => onPick(i)}
-                   className={`bar-group${isActive ? " active" : ""}${isHover ? " hover" : ""}`}>
-                  <rect className="hit" x={cx - slotW / 2} y="0" width={slotW} height={H}/>
-                  <rect className="bar-income-rect" x={cx - barW} y={mid - ih} width={barW} height={ih} rx="1.2"/>
-                  <rect className="bar-expense-rect" x={cx} y={mid} width={barW} height={eh} rx="1.2"/>
-                  <circle className={`cf-cum-dot${isActive ? " active" : ""}`} cx={cx} cy={cumToY(cumPoints[i]!)} r={isActive || isHover ? 2.2 : 1.6}/>
+                   className={`cf-bar-group${isActive ? " active" : ""}${isHover ? " hover" : ""}`}>
+                  <line className="cf-hover-guide" x1={cx} x2={cx} y1="0" y2={H}/>
+                  <rect className="cf-hit"          x={cx - slotW / 2} y="0"      width={slotW} height={H}/>
+                  <rect className="cf-bar-income"   x={cx - barW - 0.2} y={mid - ih} width={barW} height={ih} rx="1.2"/>
+                  <rect className="cf-bar-expense"  x={cx + 0.2}        y={mid}      width={barW} height={eh} rx="1.2"/>
                 </g>
               );
             })}
+
+            {months.map((_, i) => {
+              const isActive = i === activeIdx;
+              const isHover  = i === hover;
+              const r = isActive || isHover ? 2.4 : 1.7;
+              return (
+                <circle
+                  key={`d${i}`}
+                  className={`cf-cum-dot${isActive ? " active" : ""}${isHover ? " hover" : ""}`}
+                  cx={xOf(i)} cy={cumToY(cumPoints[i]!)} r={r}
+                  style={{ pointerEvents: "none" }}
+                />
+              );
+            })}
           </svg>
-          <div className="chart-labels">
+
+          <div className="cf-xlabels">
             {months.map((m, i) => (
-              <span key={i} className={`chart-lbl${i === activeIdx ? " active" : ""}`} style={{ width: `${slotW}%` }}>
-                {m.month === 1 ? `${String(m.year).slice(2)}'1月` : monthShort(m.month)}
+              <span key={i}
+                    className={`cf-xlabel${i === activeIdx ? " active" : ""}`}
+                    style={{ width: `${slotW}%` }}
+                    onClick={() => onPick(i)}>
+                {monthShort(m.month)}
+                {m.month === 1 && <em>{String(m.year)}</em>}
               </span>
             ))}
           </div>
+
           {hover !== null && months[hover] && (
-            <div className="chart-tip" style={{ left: `${slotW * hover + slotW / 2}%` }}>
-              <div className="tip-head">{monthLabel(months[hover]!.year, months[hover]!.month)}</div>
-              <div className="tip-row"><span className="bar bar-income"></span>收入<strong>{money(months[hover]!.income)}</strong></div>
-              <div className="tip-row"><span className="bar bar-expense"></span>支出<strong>{money(months[hover]!.expense)}</strong></div>
-              <div className="tip-row tip-net">結餘<strong className={months[hover]!.surplus >= 0 ? "pos" : "neg"}>{money(months[hover]!.surplus)}</strong></div>
-              <div className="tip-row">
-                <span style={{ display: "inline-block", width: 10, height: 2, background: "var(--info)", borderRadius: 2 }}></span>
-                累積<strong>{money(cumPoints[hover]!)}</strong>
-              </div>
+            <div className="cf-tip" style={{ left: `${slotW * hover + slotW / 2}%` }}>
+              <div className="cf-tip-head">{monthLabel(months[hover]!.year, months[hover]!.month)}</div>
+              <div className="cf-tip-row"><span className="sw income"></span>收入<strong>{money(months[hover]!.income)}</strong></div>
+              <div className="cf-tip-row"><span className="sw expense"></span>支出<strong>{money(months[hover]!.expense)}</strong></div>
+              <div className="cf-tip-row net">結餘<strong style={{ color: months[hover]!.surplus >= 0 ? "var(--pos)" : "var(--neg)" }}>{money(months[hover]!.surplus)}</strong></div>
+              <div className="cf-tip-row"><span className="sw cum"></span>累積<strong>{money(cumPoints[hover]!)}</strong></div>
             </div>
           )}
+        </div>
+      </div>
+
+      <div className="cf-summary">
+        <div className="cf-summary-cell">
+          <span className="l">區間總收入</span>
+          <span className="v">{money(totalIncome)}</span>
+          <span className="s">{months.length} 個月</span>
+        </div>
+        <div className="cf-summary-cell">
+          <span className="l">區間總支出</span>
+          <span className="v">{money(totalExpense)}</span>
+          <span className="s">月均 {compactMoney(totalExpense / Math.max(months.length, 1))}</span>
+        </div>
+        <div className="cf-summary-cell">
+          <span className="l">淨結餘</span>
+          <span className={`v ${totalSurplus >= 0 ? "pos" : "neg"}`}>{totalSurplus >= 0 ? "+" : ""}{money(totalSurplus)}</span>
+          <span className="s">儲蓄率 {avgSavings.toFixed(1)}%</span>
+        </div>
+        <div className="cf-summary-cell">
+          <span className="l">期末累積現金</span>
+          <span className="v info">{money(endCum)}</span>
+          <span className="s">vs 起點 {endCum >= 0 ? "+" : ""}{compactMoney(endCum)}</span>
         </div>
       </div>
     </div>

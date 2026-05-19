@@ -1141,24 +1141,24 @@ function RoboAdvisorModal({ goals, surplus, income, expense, onClose }: { goals:
     };
 
     const system = [
-      "你是「家庭理財」App 的專屬中文理財顧問，服務一個在台灣生活的美台家庭。",
+      "你是「家庭理財」App 的專屬中文理財顧問，服務一個在台灣生活的家庭。",
       "",
       "【家庭背景】",
-      "- 男方：美國公民，居住台灣，透過 Charles Schwab 券商投資美國掛牌 ETF，匯款方式為台灣銀行電匯美元至 Schwab",
-      "- 女方：台灣公民，使用台灣券商帳戶投資台股與台灣債券 ETF",
+      "- N：持有美國護照，居住台灣，透過 Charles Schwab 券商投資美國掛牌 ETF，匯款方式為台灣銀行電匯美元至 Schwab",
+      "- J：台灣公民，使用台灣券商帳戶投資台股與台灣債券 ETF",
       "- 家庭日常收支以 TWD 計算",
       "",
       "【投資限制 — 極重要】",
-      "- 男方絕對不可購買台灣掛牌基金/ETF（0050、00679B、00720B 等），這些屬於 PFIC（Passive Foreign Investment Company）",
-      "- PFIC 對美國公民的稅務懲罰極重（最高 37% 稅率＋利息罰款），且須每年申報 Form 8621，費用昂貴",
-      "- 男方只能透過 Schwab 購買美國掛牌 ETF：VT（全球股市）、BNDW（全球債券）、BND、VTI、VXUS 等",
-      "- 女方可自由購買台灣掛牌 ETF；無 PFIC 問題",
+      "- N 絕對不可購買台灣掛牌基金/ETF（0050、00679B、00720B 等），這些屬於 PFIC（Passive Foreign Investment Company）",
+      "- PFIC 稅務懲罰極重（最高 37% 稅率＋利息罰款），且須每年申報 Form 8621，費用昂貴",
+      "- N 只能透過 Schwab 購買美國掛牌 ETF：VT（全球股市）、BNDW（全球債券）、BND、VTI、VXUS 等",
+      "- J 可自由購買台灣掛牌 ETF；無 PFIC 問題",
       "",
       "【可用資產工具】",
       "- 定存/活存（台灣銀行）：預期年化 1.8%，TWD，無匯率風險，任何人皆可持有",
       "- 全球債券 ETF（BNDW）：預期年化 3.5%，USD，Schwab 購入，有 TWD/USD 匯率風險；內扣 0.05%/年",
       "- 全球股市 ETF（VT）：預期年化 7.9%，USD，Schwab 購入，有 TWD/USD 匯率風險；持有全球約 9,000 支股票，約 60% 美股＋40% 非美股；內扣 0.07%/年",
-      "- 台股市值型 ETF（0050）：預期年化 7.5%，TWD，女方購入，男方因 PFIC 限制不可買；內扣約 0.43%/年",
+      "- 台股市值型 ETF（0050）：預期年化 7.5%，TWD，J 購入，N 因 PFIC 限制不可買；內扣約 0.43%/年",
       "",
       "【費用注意事項】",
       "- Schwab 不收 ETF 交易手續費，也不收帳戶管理費",
@@ -1183,10 +1183,29 @@ function RoboAdvisorModal({ goals, surplus, income, expense, onClose }: { goals:
       "避免空洞的免責聲明，除非建議涉及重大財務決策，否則不須加「以上僅供參考」。",
     ].join("\n");
 
+    // Build Gemini-format history. The context snapshot goes on the first user turn only
+    // so it doesn't bloat every message in a long conversation.
+    const contextBlock = `<context>\n${JSON.stringify(ctx, null, 2)}\n</context>\n\n`;
+    const priorMessages = messages.filter((m) => !m.error);
+    const history: { role: "user" | "model"; text: string }[] = [];
+    for (const m of priorMessages) {
+      // skip the initial advisor greeting — it's UI-only, not a real model turn
+      if (m === priorMessages[0] && m.role === "advisor") continue;
+      history.push({ role: m.role === "advisor" ? "model" : "user", text: m.text });
+    }
+    // prepend context to the very first user message in history (or the current one if no history)
+    const newUserText = `問題：${userText}`;
+    if (history.length === 0 || history[0].role !== "user") {
+      history.push({ role: "user", text: contextBlock + newUserText });
+    } else {
+      history[0] = { role: "user", text: contextBlock + history[0].text };
+      history.push({ role: "user", text: newUserText });
+    }
+
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ system, user: `<context>\n${JSON.stringify(ctx, null, 2)}\n</context>\n\n問題：${userText}`, model }),
+      body: JSON.stringify({ system, history, model }),
     });
     const json = await res.json();
     if (!res.ok) {
@@ -1194,7 +1213,7 @@ function RoboAdvisorModal({ goals, surplus, income, expense, onClose }: { goals:
       throw new Error("advisor_error");
     }
     return json.text as string;
-  }, [surplus, income, expense, risk, model, recs, goals, blendedAll]);
+  }, [surplus, income, expense, risk, model, recs, goals, blendedAll, messages]);
 
   async function send(text?: string) {
     const t = (text ?? input).trim();
@@ -1390,7 +1409,7 @@ function RoboAdvisorModal({ goals, surplus, income, expense, onClose }: { goals:
                       {r.mix["twStock"] && (
                         <p className="robo-note-pfic">
                           <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
-                          0050 為台灣註冊 ETF，屬 PFIC，美國公民購買須申報 Form 8621，稅務極複雜。建議由台籍配偶持有；美籍人士可用 VT 替代台股部位。
+                          0050 為台灣註冊 ETF，屬 PFIC，N 購買須申報 Form 8621，稅務極複雜。建議由 J 持有；N 可用 VT 替代台股部位。
                         </p>
                       )}
                     </div>

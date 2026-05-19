@@ -4,9 +4,14 @@ import { z } from "zod";
 
 import { getSessionUser } from "@/lib/auth";
 
+const messageSchema = z.object({
+  role: z.enum(["user", "model"]),
+  text: z.string().max(16000),
+});
+
 const schema = z.object({
   system: z.string().min(1).max(6000),
-  user: z.string().min(1).max(16000),
+  history: z.array(messageSchema).max(40),
   model: z.string().min(1).max(100).default("gemini-3-flash-preview"),
 });
 
@@ -28,13 +33,18 @@ export async function POST(request: Request) {
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  const { system, user: userText, model } = parsed.data;
+  const { system, history, model } = parsed.data;
+
+  const contents = history.map((m) => ({
+    role: m.role,
+    parts: [{ text: m.text }],
+  }));
 
   try {
     const response = await ai.models.generateContent({
       model,
       config: { systemInstruction: system },
-      contents: [{ role: "user", parts: [{ text: userText }] }],
+      contents,
     });
     const text = response.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
     return NextResponse.json({ text });
