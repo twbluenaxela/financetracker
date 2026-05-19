@@ -26,7 +26,20 @@ export async function POST(
     if (existing.householdId === invite.householdId) {
       return NextResponse.json({ error: "already_member" }, { status: 409 });
     }
-    return NextResponse.json({ error: "already_in_household" }, { status: 409 });
+
+    // Allow joining if the user is in a solo, empty auto-created household
+    // (happens when someone registers and then immediately accepts an invite)
+    const [memberCount, dataCount] = await Promise.all([
+      prisma.householdMember.count({ where: { householdId: existing.householdId } }),
+      prisma.monthlySummary.count({ where: { householdId: existing.householdId } }),
+    ]);
+    const isEmptySolo = memberCount === 1 && dataCount === 0;
+    if (!isEmptySolo) {
+      return NextResponse.json({ error: "already_in_household" }, { status: 409 });
+    }
+
+    // Delete the empty solo household and fall through to join the invite household
+    await prisma.household.delete({ where: { id: existing.householdId } });
   }
 
   await prisma.$transaction([

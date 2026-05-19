@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   signInWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
 } from "firebase/auth";
+import Link from "next/link";
 
 import { auth } from "@/lib/firebase";
 
@@ -23,14 +24,17 @@ async function exchangeTokenForSession(idToken: string) {
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleSuccess() {
+    const next = searchParams.get("next") ?? "/";
     startTransition(() => {
-      router.replace("/");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      router.replace(next as any);
       router.refresh();
     });
   }
@@ -139,6 +143,13 @@ export function LoginForm() {
           Google 登入
         </button>
       </div>
+
+      <p style={{ marginTop: 16, textAlign: "center", fontSize: 13, color: "var(--muted)" }}>
+        還沒有帳號？{" "}
+        <Link href="/register" style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
+          立即註冊
+        </Link>
+      </p>
     </>
   );
 }

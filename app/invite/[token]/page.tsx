@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 export default function InvitePage() {
   const { token } = useParams<{ token: string }>();
   const router = useRouter();
-  const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
+  const [status, setStatus] = useState<"loading" | "success" | "needs-auth" | "error">("loading");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -17,8 +17,11 @@ export default function InvitePage() {
           setTimeout(() => router.replace("/"), 2000);
         } else {
           const body = await res.json().catch(() => ({}));
+          if (body.error === "unauthorized") {
+            setStatus("needs-auth");
+            return;
+          }
           const errorMessages: Record<string, string> = {
-            unauthorized: "請先登入再點擊邀請連結。",
             invalid_token: "邀請連結無效或已過期。",
             already_used: "這個邀請連結已被使用過了。",
             expired: "邀請連結已過期（有效期為 7 天）。",
@@ -56,6 +59,27 @@ export default function InvitePage() {
             <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>✓</div>
             <h2 style={{ marginBottom: "0.5rem" }}>已成功加入帳本！</h2>
             <p className="muted">正在為您導向總覽頁…</p>
+          </>
+        )}
+        {status === "needs-auth" && (
+          <>
+            <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>👋</div>
+            <h2 style={{ marginBottom: "0.5rem" }}>您收到了邀請！</h2>
+            <p className="muted" style={{ marginBottom: "1.5rem" }}>請先登入或建立帳號，再加入家庭帳本。</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <a
+                href={`/login?next=/invite/${token}`}
+                style={{ width: "100%", display: "block", textAlign: "center", padding: "9px 16px", borderRadius: "var(--radius-sm)", background: "var(--accent)", color: "#fff", fontWeight: 600, fontSize: 13.5, textDecoration: "none" }}
+              >
+                登入現有帳號
+              </a>
+              <a
+                href={`/register?next=/invite/${token}`}
+                style={{ width: "100%", display: "block", textAlign: "center", padding: "9px 16px", borderRadius: "var(--radius-sm)", background: "var(--bg-elev)", color: "var(--text)", fontWeight: 600, fontSize: 13.5, border: "1px solid var(--border)", textDecoration: "none" }}
+              >
+                建立新帳號
+              </a>
+            </div>
           </>
         )}
         {status === "error" && (
