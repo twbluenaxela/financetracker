@@ -12,6 +12,8 @@ export type SessionUser = {
   householdId: number;
   role: string;
   canEdit: boolean;
+  displayName: string | null;
+  photoURL: string | null;
 };
 
 export function AppShell({

@@ -22,6 +22,8 @@ export default async function SettingsPage() {
         uid: m.firebaseUid,
         role: m.role,
         canEdit: m.canEdit,
+        displayName: m.displayName ?? null,
+        photoUrl: m.photoUrl ?? null,
         joinedAt: m.joinedAt.toISOString(),
       }))}
     />

@@ -53,6 +53,8 @@ model HouseholdMember {
   firebaseUid String   @map("firebase_uid") @db.VarChar(128)
   role        String   @default("member") @db.VarChar(10)
   canEdit     Boolean  @default(false) @map("can_edit")
+  displayName String?  @map("display_name") @db.VarChar(50)
+  photoUrl    String?  @map("photo_url")
   joinedAt    DateTime @default(now()) @map("joined_at") @db.Timestamptz(6)
 
   household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)

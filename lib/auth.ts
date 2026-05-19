@@ -16,6 +16,8 @@ export type SessionUser = {
   householdId: number;
   role: string;
   canEdit: boolean;
+  displayName: string | null;
+  photoURL: string | null;
 };
 
 export async function createSession(idToken: string) {
@@ -56,6 +58,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       email: decoded.email ?? null,
       name: decoded.name ?? null,
       ...membership,
+      // DB photo takes precedence; fall back to Firebase-provided photo (Google sign-in etc.)
+      photoURL: membership.photoUrl ?? (decoded.picture as string | undefined) ?? null,
     };
   } catch {
     return null;

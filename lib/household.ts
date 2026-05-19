@@ -6,16 +6,17 @@ export type HouseholdMembership = {
   householdId: number;
   role: string;
   canEdit: boolean;
+  displayName: string | null;
+  photoUrl: string | null;
 };
 
 export async function getOrCreateHousehold(uid: string): Promise<HouseholdMembership> {
   const existing = await prisma.householdMember.findFirst({
     where: { firebaseUid: uid },
-    select: { householdId: true, role: true, canEdit: true },
+    select: { householdId: true, role: true, canEdit: true, displayName: true, photoUrl: true },
   });
   if (existing) return existing;
 
-  // First login: create a household and make this user the owner
   const household = await prisma.household.create({ data: { name: "家庭" } });
   await prisma.householdMember.create({
     data: {
@@ -25,5 +26,5 @@ export async function getOrCreateHousehold(uid: string): Promise<HouseholdMember
       canEdit: true,
     },
   });
-  return { householdId: household.id, role: "owner", canEdit: true };
+  return { householdId: household.id, role: "owner", canEdit: true, displayName: null, photoUrl: null };
 }

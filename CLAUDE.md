@@ -79,7 +79,7 @@ app/
     months/               # POST — upsert monthly summary; [year]/[month]/DELETE
     invite/               # POST — generate invite token (owner only)
     invite/[token]/       # POST — accept invite (joins caller to household)
-    household/members/[uid]/  # PATCH canEdit, DELETE member (owner only)
+    household/members/[uid]/  # PATCH canEdit + displayName, DELETE member (owner only)
     chat/                 # POST — Gemini multi-turn chat; GET /models — live model list
 
   invite/[token]/         # public invite acceptance page (no auth gate — handles it inline)
@@ -133,12 +133,18 @@ Every user belongs to exactly one household. On first login, `getOrCreateHouseho
 {
   uid: string;
   email: string | null;
-  name: string | null;
+  name: string | null;        // Firebase Auth display name (e.g. from Google)
   householdId: number;
-  role: string;       // "owner" | "member"
+  role: string;               // "owner" | "member"
   canEdit: boolean;
+  displayName: string | null; // custom name stored in household_members; shown in sidebar + settings
+  photoURL: string | null;    // resolved: DB photoUrl → decoded.picture (Google) → null
 }
 ```
+
+`SessionUser` is defined in `lib/auth.ts` (server) and mirrored in `components/app-shell.tsx` (client). Keep them in sync.
+
+Members have an optional `displayName` (`VARCHAR(50)`) and `photoUrl` (`TEXT`) stored on `HouseholdMember`. Any member can edit their own; the owner can edit anyone's. See `agents.md` for full permission rules and the photo upload flow.
 
 Invite links are one-time-use, 7-day tokens stored in `household_invites`. They are valid across Fly machine restarts because the token lives in Neon, not in memory.
 

@@ -38,8 +38,10 @@ const items = [
   },
 ] as const;
 
-function userDisplay(email: string) {
-  const handle = email.split("@")[0] ?? email;
+function userDisplayName(user: SessionUser): string {
+  if (user.displayName) return user.displayName;
+  if (user.name) return user.name;
+  const handle = (user.email ?? user.uid).split("@")[0] ?? user.uid;
   return handle.slice(0, 1).toUpperCase() + handle.slice(1);
 }
 
@@ -49,6 +51,22 @@ function activeFromPath(pathname: string) {
   if (pathname.startsWith("/goals")) return "goals";
   if (pathname.startsWith("/investments")) return "investments";
   return "home";
+}
+
+function Avatar({ user }: { user: SessionUser }) {
+  if (user.photoURL) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={user.photoURL}
+        alt=""
+        className="avatar"
+        style={{ objectFit: "cover" }}
+      />
+    );
+  }
+  const display = userDisplayName(user);
+  return <div className="avatar">{display[0]?.toUpperCase()}</div>;
 }
 
 export function Sidebar({
@@ -68,8 +86,7 @@ export function Sidebar({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const active = activeFromPath(pathname);
-  const display = userDisplay(user.email ?? user.uid);
-  const initial = display[0];
+  const display = userDisplayName(user);
   const onSettings = pathname.startsWith("/settings");
 
   async function logout() {
@@ -144,7 +161,7 @@ export function Sidebar({
         </Link>
 
         <div className="user-pill">
-          <div className="avatar">{initial}</div>
+          <Avatar user={user} />
           <div className="user-info">
             <div className="user-name">{display}</div>
             <div className="user-email">{user.email ?? user.uid}</div>
