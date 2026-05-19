@@ -5,8 +5,8 @@ import { z } from "zod";
 import { getSessionUser } from "@/lib/auth";
 
 const schema = z.object({
-  system: z.string().min(1).max(2000),
-  user: z.string().min(1).max(8000),
+  system: z.string().min(1).max(6000),
+  user: z.string().min(1).max(16000),
   model: z.string().min(1).max(100).default("gemini-3-flash-preview"),
 });
 
@@ -33,7 +33,8 @@ export async function POST(request: Request) {
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: [{ role: "user", parts: [{ text: system + "\n\n" + userText }] }],
+      config: { systemInstruction: system },
+      contents: [{ role: "user", parts: [{ text: userText }] }],
     });
     const text = response.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
     return NextResponse.json({ text });

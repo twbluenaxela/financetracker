@@ -1,60 +1,728 @@
-import Link from "next/link";
+"use client";
 
-import type { StatementBundle } from "@/lib/statements";
+import { useEffect, useMemo, useState } from "react";
+import type { StatementBundle, StatementMonth } from "@/lib/statements";
 import { compactMoney, monthChinese, monthLabel, money } from "@/lib/statements";
 
-function chartLabel(year: number, month: number) {
-  return month === 1 ? `${String(year).slice(2)}'1月` : `${month}月`;
+type Period = "12M" | "2026" | "2025";
+
+function fmtSigned(n: number) {
+  return (n >= 0 ? "+" : "") + money(n);
 }
 
-function linePath(points: Array<{ x: number; y: number }>) {
-  return points
-    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
-    .join(" ");
+function monthShort(month: number) {
+  return ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"][month - 1]!;
 }
 
-function ratio(value: number, total: number) {
-  return total > 0 ? (value / total) * 100 : 0;
+function expColor(v: number, max: number) {
+  if (!v || max === 0) return "var(--bg-elev)";
+  const t = Math.min(1, Math.pow(v / max, 0.7));
+  return `color-mix(in oklab, var(--neg) ${Math.round(t * 78)}%, var(--bg-elev))`;
 }
 
-export function StatementsView({ data }: { data: StatementBundle }) {
-  const latest = data.latest;
-  const months = data.months;
-  const chartMax = Math.max(...months.flatMap((month) => [month.income, month.expense]), 1);
-  const cashMax = Math.max(...months.map((month) => month.cumulativeSurplus), 1);
-  const cashPoints = months.map((month, index) => {
-    const slotW = 100 / Math.max(1, months.length);
-    return {
-      x: slotW * index + slotW / 2,
-      y: 98 - (month.cumulativeSurplus / cashMax) * 80,
-    };
+function incColor(v: number, max: number) {
+  if (!v || max === 0) return "var(--bg-elev)";
+  const t = Math.min(1, Math.pow(v / max, 0.7));
+  return `color-mix(in oklab, var(--accent) ${Math.round(t * 78)}%, var(--bg-elev))`;
+}
+
+// ---- Period switcher ----
+function PeriodSwitcher({ period, onPeriod }: { period: Period; onPeriod: (p: Period) => void }) {
+  return (
+    <div className="period-sw">
+      {(["12M", "2026", "2025"] as Period[]).map((p) => (
+        <button key={p} className={period === p ? "active" : ""} onClick={() => onPeriod(p)}>
+          {p === "12M" ? "滾動 12M" : p === "2026" ? "2026 YTD" : "2025"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ---- KPI strip ----
+function ReportsKPIs({ months, netWorth, totalAssets, totalLiab }: {
+  months: StatementMonth[];
+  netWorth: number;
+  totalAssets: number;
+  totalLiab: number;
+}) {
+  const totalI = months.reduce((a, m) => a + m.income, 0);
+  const totalE = months.reduce((a, m) => a + m.expense, 0);
+  const totalS = totalI - totalE;
+  const rate = totalI > 0 ? (totalS / totalI) * 100 : 0;
+  const half = Math.floor(months.length / 2);
+  const sA = months.slice(0, half).reduce((a, m) => a + m.surplus, 0);
+  const sB = months.slice(half).reduce((a, m) => a + m.surplus, 0);
+  const surplusYoY = sA > 0 ? ((sB - sA) / sA) * 100 : 0;
+
+  return (
+    <div className="kpi-strip">
+      <div className="kpi-tile">
+        <div className="kpi-label">期間收入</div>
+        <div className="kpi-val">{compactMoney(totalI)}</div>
+        <div className="kpi-foot">{months.length} 個月累計</div>
+      </div>
+      <div className="kpi-tile">
+        <div className="kpi-label">期間支出</div>
+        <div className="kpi-val neg">{compactMoney(totalE)}</div>
+        <div className="kpi-foot">{months.length} 個月累計</div>
+      </div>
+      <div className="kpi-tile">
+        <div className="kpi-label">期間結餘</div>
+        <div className={`kpi-val ${totalS >= 0 ? "pos" : "neg"}`}>{compactMoney(totalS)}</div>
+        {months.length >= 2 && (
+          <div className={`kpi-trend ${surplusYoY >= 0 ? "pos" : "neg"}`}>
+            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d={surplusYoY >= 0 ? "m6 14 6-6 6 6" : "m6 10 6 6 6-6"}/>
+            </svg>
+            {surplusYoY >= 0 ? "+" : ""}{surplusYoY.toFixed(1)}% 對前期
+          </div>
+        )}
+      </div>
+      <div className="kpi-tile">
+        <div className="kpi-label">儲蓄率</div>
+        <div className="kpi-val muted-val">{rate.toFixed(1)}%</div>
+        <div className="kpi-foot">收入留下的比例</div>
+      </div>
+      <div className="kpi-tile">
+        <div className="kpi-label">淨值</div>
+        <div className="kpi-val">{compactMoney(netWorth)}</div>
+        <div className="kpi-foot">資產 {compactMoney(totalAssets)} − 負債 {compactMoney(totalLiab)}</div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Cashflow chart ----
+function CashflowChart({ months, activeIdx, onPick }: {
+  months: StatementMonth[];
+  activeIdx: number;
+  onPick: (i: number) => void;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+
+  const H = 280;
+  const mid = H / 2;
+  const N = months.length;
+  const slotW = N > 0 ? 100 / N : 100;
+  const barW = slotW * 0.30;
+  const max = Math.max(...months.flatMap((m) => [m.income, m.expense]), 1);
+
+  let cum = 0;
+  const cumPoints = months.map((m) => { cum += m.surplus; return cum; });
+  const cumMax = Math.max(...cumPoints.map((v) => Math.abs(v)), 1);
+  const cumToY = (v: number) => mid - (v / cumMax) * (mid - 18);
+
+  const linePath = cumPoints.map((v, i) => {
+    const x = slotW * i + slotW / 2;
+    return `${i === 0 ? "M" : "L"} ${x} ${cumToY(v)}`;
+  }).join(" ");
+
+  const areaPath = N > 0
+    ? `M ${slotW / 2} ${mid} ` +
+      cumPoints.map((v, i) => `L ${slotW * i + slotW / 2} ${cumToY(v)}`).join(" ") +
+      ` L ${slotW * (N - 1) + slotW / 2} ${mid} Z`
+    : "";
+
+  if (!months.length) return null;
+
+  return (
+    <div className="card cf-card">
+      <div className="card-head">
+        <div>
+          <div className="card-title">現金流</div>
+          <div className="card-sub muted">每月收入 vs 支出 · 累積現金以藍線疊加 · 點擊月份查看細節</div>
+        </div>
+        <div className="cf-legend">
+          <span><span className="bar bar-income"></span>收入</span>
+          <span><span className="bar bar-expense"></span>支出</span>
+          <span><span className="cf-legend-line"></span>累積現金</span>
+        </div>
+      </div>
+      <div className="chart-wrap">
+        <div className="chart-axis" style={{ padding: "2px 0 22px" }}>
+          <span>{compactMoney(max)}</span>
+          <span>{compactMoney(max / 2)}</span>
+          <span>0</span>
+          <span>{compactMoney(max / 2)}</span>
+          <span>{compactMoney(max)}</span>
+        </div>
+        <div className="chart-area">
+          <svg viewBox={`0 0 100 ${H}`} preserveAspectRatio="none" className="cf-svg">
+            <line className="chart-grid" x1="0" x2="100" y1={mid - mid * 0.5} y2={mid - mid * 0.5}/>
+            <line className="chart-grid" x1="0" x2="100" y1={mid + mid * 0.5} y2={mid + mid * 0.5}/>
+            <line className="chart-mid" x1="0" x2="100" y1={mid} y2={mid}/>
+            <path d={areaPath} className="cf-cum-area"/>
+            <path d={linePath} className="cf-cum-line"/>
+            {months.map((m, i) => {
+              const cx = slotW * i + slotW / 2;
+              const ih = Math.max(0, (m.income / max) * (mid - 10));
+              const eh = Math.max(0, (m.expense / max) * (mid - 10));
+              const isActive = i === activeIdx;
+              const isHover = i === hover;
+              return (
+                <g key={i}
+                   onMouseEnter={() => setHover(i)}
+                   onMouseLeave={() => setHover(null)}
+                   onClick={() => onPick(i)}
+                   className={`bar-group${isActive ? " active" : ""}${isHover ? " hover" : ""}`}>
+                  <rect className="hit" x={cx - slotW / 2} y="0" width={slotW} height={H}/>
+                  <rect className="bar-income-rect" x={cx - barW} y={mid - ih} width={barW} height={ih} rx="1.2"/>
+                  <rect className="bar-expense-rect" x={cx} y={mid} width={barW} height={eh} rx="1.2"/>
+                  <circle className={`cf-cum-dot${isActive ? " active" : ""}`} cx={cx} cy={cumToY(cumPoints[i]!)} r={isActive || isHover ? 2.2 : 1.6}/>
+                </g>
+              );
+            })}
+          </svg>
+          <div className="chart-labels">
+            {months.map((m, i) => (
+              <span key={i} className={`chart-lbl${i === activeIdx ? " active" : ""}`} style={{ width: `${slotW}%` }}>
+                {m.month === 1 ? `${String(m.year).slice(2)}'1月` : monthShort(m.month)}
+              </span>
+            ))}
+          </div>
+          {hover !== null && months[hover] && (
+            <div className="chart-tip" style={{ left: `${slotW * hover + slotW / 2}%` }}>
+              <div className="tip-head">{monthLabel(months[hover]!.year, months[hover]!.month)}</div>
+              <div className="tip-row"><span className="bar bar-income"></span>收入<strong>{money(months[hover]!.income)}</strong></div>
+              <div className="tip-row"><span className="bar bar-expense"></span>支出<strong>{money(months[hover]!.expense)}</strong></div>
+              <div className="tip-row tip-net">結餘<strong className={months[hover]!.surplus >= 0 ? "pos" : "neg"}>{money(months[hover]!.surplus)}</strong></div>
+              <div className="tip-row">
+                <span style={{ display: "inline-block", width: 10, height: 2, background: "var(--info)", borderRadius: 2 }}></span>
+                累積<strong>{money(cumPoints[hover]!)}</strong>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Heatmap ----
+function CategoryHeatmap({ months, activeIdx }: { months: StatementMonth[]; activeIdx: number }) {
+  const [tip, setTip] = useState<{ cat: string; mIdx: number; kind: string; v: number } | null>(null);
+
+  const expByCat: Record<string, number> = {};
+  const incByCat: Record<string, number> = {};
+  months.forEach((m) => {
+    m.expenseLines.forEach((l) => { expByCat[l.name] = (expByCat[l.name] ?? 0) + l.amount; });
+    m.incomeLines.forEach((l) => { incByCat[l.name] = (incByCat[l.name] ?? 0) + l.amount; });
   });
-  const cashPath = cashPoints.length > 0 ? linePath(cashPoints) : "";
-  const totalAssets = data.trackedAssets;
-  const liabilityPct = ratio(data.trackedLiabilities, Math.max(totalAssets, 1));
 
-  if (!latest) {
+  const expCats = Object.entries(expByCat).sort((a, b) => b[1] - a[1]).map(([n]) => n);
+  const incCats = Object.entries(incByCat).sort((a, b) => b[1] - a[1]).map(([n]) => n);
+
+  const allExpAmts = months.flatMap((m) => m.expenseLines.map((l) => l.amount));
+  const allIncAmts = months.flatMap((m) => m.incomeLines.map((l) => l.amount));
+  const maxExp = Math.max(...allExpAmts, 1);
+  const maxInc = Math.max(...allIncAmts, 1);
+
+  const monthCols = `repeat(${months.length}, minmax(0, 1fr))`;
+
+  function cellFor(m: StatementMonth, cat: string, kind: "income" | "expense") {
+    const line = (kind === "expense" ? m.expenseLines : m.incomeLines).find((l) => l.name === cat);
+    return line?.amount ?? 0;
+  }
+
+  const colTotalsExp = months.map((m) => m.expenseLines.reduce((a, l) => a + l.amount, 0));
+  const colTotalsInc = months.map((m) => m.incomeLines.reduce((a, l) => a + l.amount, 0));
+  const colSurplus = months.map((_, i) => colTotalsInc[i]! - colTotalsExp[i]!);
+
+  if (!months.length) return null;
+
+  return (
+    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <div className="card-head" style={{ padding: "20px 22px 12px", marginBottom: 0 }}>
+        <div>
+          <div className="card-title">分類 × 月份</div>
+          <div className="card-sub muted">每格顏色越深、本月花費越大。把游標放在格子上看細項。</div>
+        </div>
+        <div className="hm-legend">
+          <span>支出強度</span>
+          <span className="hm-scale">
+            {[0, 0.2, 0.4, 0.7, 1].map((t, i) => (
+              <span key={i} style={{ background: expColor(maxExp * t, maxExp) }}></span>
+            ))}
+          </span>
+          <span className="hm-scale-lbl">$0</span>
+          <span className="hm-scale-lbl">→</span>
+          <span className="hm-scale-lbl">{compactMoney(maxExp)}</span>
+        </div>
+      </div>
+
+      <div className="hm-wrap" style={{ gridTemplateColumns: "170px 1fr 96px" }}>
+        {/* Header row */}
+        <div className="hm-corner tl">分類</div>
+        <div className="hm-months" style={{ gridTemplateColumns: monthCols }}>
+          {months.map((m, i) => (
+            <div key={i} className={`hm-month${i === activeIdx ? " current" : ""}`}>
+              {monthShort(m.month)}
+              <em>{String(m.year).slice(2)}</em>
+            </div>
+          ))}
+        </div>
+        <div className="hm-corner" style={{ textAlign: "right", borderLeft: "1px solid var(--border)", color: "var(--muted)", fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600 }}>合計</div>
+
+        {/* Income section header */}
+        <div className="hm-row-label income" style={{ background: "var(--bg-elev)", fontWeight: 700, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-soft)" }}>
+          <span className="swatch" style={{ background: "var(--accent)" }}></span><span>收入</span>
+        </div>
+        <div className="hm-row" style={{ gridTemplateColumns: monthCols, background: "var(--bg-elev)" }}></div>
+        <div className="hm-total" style={{ background: "var(--bg-elev)", fontWeight: 700, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-soft)" }}>
+          {compactMoney(Object.values(incByCat).reduce((a, b) => a + b, 0))}
+        </div>
+
+        {/* Income rows */}
+        {incCats.map((cat) => {
+          const rowTotal = months.reduce((a, m) => a + cellFor(m, cat, "income"), 0);
+          return (
+            <>
+              <div key={`il-${cat}`} className="hm-row-label income">
+                <span className="swatch" style={{ background: "var(--accent)" }}></span>
+                <span className="name">{cat}</span>
+              </div>
+              <div key={`ir-${cat}`} className="hm-row" style={{ gridTemplateColumns: monthCols }}>
+                {months.map((m, mi) => {
+                  const v = cellFor(m, cat, "income");
+                  const dense = v / maxInc > 0.35;
+                  return (
+                    <div key={mi}
+                         className={`hm-cell${dense ? " dense" : ""}${mi === activeIdx ? " current" : ""}`}
+                         style={{ background: incColor(v, maxInc) }}
+                         onMouseEnter={() => setTip({ cat, mIdx: mi, kind: "income", v })}
+                         onMouseLeave={() => setTip(null)}>
+                      <span className="v">{v > 0 ? compactMoney(v) : ""}</span>
+                      {tip?.cat === cat && tip?.mIdx === mi && (
+                        <div className="hm-tip">
+                          <div className="hm-tip-head">{monthLabel(m.year, m.month)} · {cat}</div>
+                          <div className="hm-tip-row"><span>金額</span><strong>{money(v)}</strong></div>
+                          <div className="hm-tip-row"><span>佔月收入</span><strong>{m.income > 0 ? ((v / m.income) * 100).toFixed(1) : "0"}%</strong></div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div key={`it-${cat}`} className="hm-total">{compactMoney(rowTotal)}</div>
+            </>
+          );
+        })}
+
+        {/* Expense section header */}
+        <div className="hm-row-label expense" style={{ background: "var(--bg-elev)", fontWeight: 700, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-soft)" }}>
+          <span className="swatch" style={{ background: "var(--neg)" }}></span><span>支出</span>
+        </div>
+        <div className="hm-row" style={{ gridTemplateColumns: monthCols, background: "var(--bg-elev)" }}></div>
+        <div className="hm-total" style={{ background: "var(--bg-elev)", fontWeight: 700, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-soft)" }}>
+          {compactMoney(Object.values(expByCat).reduce((a, b) => a + b, 0))}
+        </div>
+
+        {/* Expense rows */}
+        {expCats.map((cat) => {
+          const rowTotal = months.reduce((a, m) => a + cellFor(m, cat, "expense"), 0);
+          const isUncat = cat === "未分類";
+          return (
+            <>
+              <div key={`el-${cat}`} className={`hm-row-label expense${isUncat ? " uncat" : ""}`}>
+                <span className="swatch" style={{ background: isUncat ? "var(--warn)" : "var(--neg)" }}></span>
+                <span className="name">{cat}</span>
+                {isUncat && <span className="cat-flag" style={{ marginLeft: "auto" }}>未指派</span>}
+              </div>
+              <div key={`er-${cat}`} className="hm-row" style={{ gridTemplateColumns: monthCols }}>
+                {months.map((m, mi) => {
+                  const v = cellFor(m, cat, "expense");
+                  const dense = v / maxExp > 0.35;
+                  return (
+                    <div key={mi}
+                         className={`hm-cell${dense ? " dense" : ""}${mi === activeIdx ? " current" : ""}`}
+                         style={{ background: expColor(v, maxExp) }}
+                         onMouseEnter={() => setTip({ cat, mIdx: mi, kind: "expense", v })}
+                         onMouseLeave={() => setTip(null)}>
+                      <span className="v">{v > 0 ? compactMoney(v) : ""}</span>
+                      {tip?.cat === cat && tip?.mIdx === mi && (
+                        <div className="hm-tip">
+                          <div className="hm-tip-head">{monthLabel(m.year, m.month)} · {cat}</div>
+                          <div className="hm-tip-row"><span>金額</span><strong>{money(v)}</strong></div>
+                          <div className="hm-tip-row"><span>佔月支出</span><strong>{m.expense > 0 ? ((v / m.expense) * 100).toFixed(1) : "0"}%</strong></div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div key={`et-${cat}`} className="hm-total">{compactMoney(rowTotal)}</div>
+            </>
+          );
+        })}
+
+        {/* Footer: totals */}
+        <div className="hm-foot-label">月總支出</div>
+        <div className="hm-row" style={{ gridTemplateColumns: monthCols }}>
+          {months.map((_, mi) => (
+            <div key={mi} className="hm-foot-cell" style={{ color: "var(--neg)" }}>{compactMoney(colTotalsExp[mi]!)}</div>
+          ))}
+        </div>
+        <div className="hm-foot-total" style={{ color: "var(--neg)" }}>{compactMoney(colTotalsExp.reduce((a, b) => a + b, 0))}</div>
+
+        <div className="hm-foot-label">月結餘</div>
+        <div className="hm-row" style={{ gridTemplateColumns: monthCols }}>
+          {months.map((_, mi) => (
+            <div key={mi} className={`hm-foot-cell surplus${colSurplus[mi]! >= 0 ? " pos" : " neg"}`}>
+              {compactMoney(colSurplus[mi]!)}
+            </div>
+          ))}
+        </div>
+        <div className="hm-foot-total" style={{ color: "var(--pos)" }}>{compactMoney(colSurplus.reduce((a, b) => a + b, 0))}</div>
+      </div>
+    </div>
+  );
+}
+
+// ---- P&L table ----
+function IncomeStatement({ months, activeIdx, onPick }: {
+  months: StatementMonth[];
+  activeIdx: number;
+  onPick: (i: number) => void;
+}) {
+  type Row = { kind: "year"; year: number } | { kind: "m"; m: StatementMonth; i: number };
+  const rows: Row[] = [];
+  let lastYear: number | null = null;
+  months.forEach((m, i) => {
+    if (m.year !== lastYear) { rows.push({ kind: "year", year: m.year }); lastYear = m.year; }
+    rows.push({ kind: "m", m, i });
+  });
+  const totalI = months.reduce((a, m) => a + m.income, 0);
+  const totalE = months.reduce((a, m) => a + m.expense, 0);
+  const totalS = totalI - totalE;
+
+  return (
+    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <div className="card-head" style={{ padding: "20px 22px 12px", marginBottom: 0 }}>
+        <div>
+          <div className="card-title">損益表</div>
+          <div className="card-sub muted">每月收入、支出、結餘與儲蓄率</div>
+        </div>
+      </div>
+      <div className="table-wrap" style={{ margin: 0, maxHeight: 480, overflowY: "auto" }}>
+        <table className="pnl-table">
+          <thead>
+            <tr>
+              <th>月份</th>
+              <th className="num">收入</th>
+              <th className="num">支出</th>
+              <th className="num">結餘</th>
+              <th className="num">儲蓄率</th>
+              <th>備註</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, idx) => {
+              if (r.kind === "year") {
+                const yMonths = months.filter((m) => m.year === r.year);
+                const yI = yMonths.reduce((a, m) => a + m.income, 0);
+                const yE = yMonths.reduce((a, m) => a + m.expense, 0);
+                return (
+                  <tr key={`y-${r.year}-${idx}`} className="year-sep">
+                    <td>{r.year} 年</td>
+                    <td className="num">{money(yI)}</td>
+                    <td className="num">{money(yE)}</td>
+                    <td className={`num ${(yI - yE) >= 0 ? "pos" : "neg"}`}>{money(yI - yE)}</td>
+                    <td className="num">{((yI - yE) / Math.max(yI, 1) * 100).toFixed(1)}%</td>
+                    <td>{yMonths.length} 個月</td>
+                  </tr>
+                );
+              }
+              const { m, i } = r;
+              const isCurrent = i === activeIdx;
+              const rate = m.savingsRate ?? 0;
+              return (
+                <tr key={`m-${m.year}-${m.month}`} className={isCurrent ? "current" : ""} onClick={() => onPick(i)} style={{ cursor: "pointer" }}>
+                  <td>
+                    <div className="mo-cell">
+                      <strong>{monthLabel(m.year, m.month)}</strong>
+                      <span className="muted">{monthChinese(m.month)}</span>
+                      {isCurrent && <span className="now-pill">查看中</span>}
+                    </div>
+                  </td>
+                  <td className="num">{money(m.income)}</td>
+                  <td className="num">{money(m.expense)}</td>
+                  <td className={`num ${m.surplus >= 0 ? "pos" : "neg"}`}>{fmtSigned(m.surplus)}</td>
+                  <td className="num">
+                    <span className={`savings-bar${rate < 0 ? " neg" : ""}`}>
+                      <i style={{ width: `${Math.min(100, Math.abs(rate))}%` }}></i>
+                    </span>
+                    <span className="muted">{rate.toFixed(1)}%</span>
+                  </td>
+                  <td className="muted" style={{ fontSize: 12, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {m.note?.trim() || "—"}
+                  </td>
+                </tr>
+              );
+            })}
+            <tr className="totals">
+              <td>期間合計</td>
+              <td className="num">{money(totalI)}</td>
+              <td className="num">{money(totalE)}</td>
+              <td className={`num ${totalS >= 0 ? "pos" : "neg"}`}>{money(totalS)}</td>
+              <td className="num">{(totalS / Math.max(totalI, 1) * 100).toFixed(1)}%</td>
+              <td className="muted">{months.length} 個月</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ---- Balance sheet ----
+function BalanceSheet({ data }: { data: StatementBundle }) {
+  const cumulativeCash = Math.max(0, data.cumulativeCash);
+  const assets = [
+    { label: "現金與活存", amount: cumulativeCash, sub: "累積結餘 + 流動現金", colorClass: "bs-bar-cash" },
+    { label: "投資本金", amount: data.investmentAssets, sub: "證券 + 基金 (持有成本)", colorClass: "bs-bar-invest" },
+    { label: "目標存款", amount: data.goalAssets, sub: `${data.goals.length} 個目標已配置`, colorClass: "bs-bar-goal" },
+  ];
+  const liab = [
+    { label: "負債", amount: data.trackedLiabilities, sub: "尚未建模", colorClass: "bs-bar-credit", muted: data.trackedLiabilities === 0 },
+  ];
+  const totalA = data.trackedAssets;
+  const totalL = data.trackedLiabilities;
+  const nw = data.netWorth;
+
+  // NW trajectory: back-project from current net worth
+  const allMonths = data.months;
+  const nwHist = allMonths.map((_, i) => {
+    const surplusAhead = allMonths.slice(i + 1).reduce((a, m) => a + m.surplus, 0);
+    return nw - surplusAhead;
+  });
+
+  const svgW = 140, svgH = 40;
+  const minN = Math.min(...nwHist, nw);
+  const maxN = Math.max(...nwHist, nw);
+  const norm = (v: number) => svgH - 2 - ((v - minN) / Math.max(1, maxN - minN)) * (svgH - 6);
+  const pathSp = nwHist.length > 1
+    ? nwHist.map((v, i) => `${i === 0 ? "M" : "L"} ${(i / (nwHist.length - 1)) * svgW} ${norm(v)}`).join(" ")
+    : `M 0 ${svgH / 2} L ${svgW} ${svgH / 2}`;
+  const nwChange = nwHist.length > 1 ? (nwHist[nwHist.length - 1]! - nwHist[0]!) : 0;
+
+  return (
+    <div className="card">
+      <div className="card-head">
+        <div>
+          <div className="card-title">資產負債表</div>
+          <div className="card-sub muted">代理淨值 · 含累積現金、目標存款、投資本金與負債</div>
+        </div>
+      </div>
+
+      <div className="bs-networth">
+        <div>
+          <div className="bs-nw-label">淨值 Net Worth</div>
+          <div className="bs-nw-val">{money(nw)}</div>
+        </div>
+        <div className="bs-nw-stat">
+          <div className="l">期間變動</div>
+          <div className={`v${nwChange >= 0 ? " pos" : " neg"}`}>
+            {nwChange >= 0 ? "+" : ""}{compactMoney(nwChange)}
+          </div>
+        </div>
+        <svg className="bs-nw-spark" viewBox={`0 0 ${svgW} ${svgH}`} preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="bs-spgrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.4"/>
+              <stop offset="100%" stopColor="var(--accent)" stopOpacity="0"/>
+            </linearGradient>
+          </defs>
+          <path d={`${pathSp} L ${svgW} ${svgH} L 0 ${svgH} Z`} fill="url(#bs-spgrad)"/>
+          <path d={pathSp} fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round"/>
+        </svg>
+      </div>
+
+      <div className="bs-composition">
+        {assets.map((a, i) => (
+          <div key={i} className={a.colorClass} style={{ width: `${(a.amount / Math.max(totalA, 1)) * 100}%` }} title={`${a.label} · ${money(a.amount)}`}></div>
+        ))}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--muted)", marginBottom: 16, fontFamily: "JetBrains Mono, monospace" }}>
+        <span>$0</span>
+        <span>總資產 {money(totalA)}</span>
+      </div>
+
+      <div className="bs-grid">
+        <div className="bs-side">
+          <div className="bs-head">
+            <h3>資產</h3>
+            <span className="bs-total">{money(totalA)}</span>
+          </div>
+          <div className="bs-rows">
+            {assets.map((a, i) => (
+              <div key={i} className="bs-row">
+                <span className={`swatch ${a.colorClass}`}></span>
+                <div>
+                  <div className="label">{a.label}</div>
+                  <div className="sub">{a.sub}</div>
+                </div>
+                <div className="col-amt">
+                  <div className="amt">{money(a.amount)}</div>
+                  <div className="amt-sub">{((a.amount / Math.max(totalA, 1)) * 100).toFixed(1)}%</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bs-side">
+          <div className="bs-head">
+            <h3>負債</h3>
+            <span className="bs-total neg">{money(totalL)}</span>
+          </div>
+          <div className="bs-rows">
+            {liab.map((l, i) => (
+              <div key={i} className="bs-row">
+                <span className={`swatch ${l.colorClass}`} style={l.muted ? { opacity: 0.4 } : {}}></span>
+                <div>
+                  <div className="label" style={l.muted ? { color: "var(--muted)" } : {}}>{l.label}</div>
+                  <div className="sub">{l.sub}</div>
+                </div>
+                <div className="col-amt">
+                  <div className="amt" style={l.muted ? { color: "var(--muted)" } : {}}>{money(l.amount)}</div>
+                  <div className="amt-sub">{totalL > 0 ? ((l.amount / totalL) * 100).toFixed(1) + "%" : "—"}</div>
+                </div>
+              </div>
+            ))}
+            <div className="bs-row" style={{ paddingTop: 14, marginTop: 4, borderTop: "1px solid var(--border)", borderBottom: 0 }}>
+              <span></span>
+              <div>
+                <div className="label" style={{ fontWeight: 700 }}>淨值</div>
+                <div className="sub">資產 − 負債</div>
+              </div>
+              <div className="col-amt">
+                <div className={`amt${nw >= 0 ? " pos" : " neg"}`} style={{ fontSize: 16 }}>{money(nw)}</div>
+                <div className="amt-sub">負債比 {((totalL / Math.max(totalA, 1)) * 100).toFixed(1)}%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Category deep-dive ----
+function CategoryDeepDive({ months }: { months: StatementMonth[] }) {
+  const totals: Record<string, number> = {};
+  months.forEach((m) => m.expenseLines.forEach((l) => { totals[l.name] = (totals[l.name] ?? 0) + l.amount; }));
+  const top = Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const grandTotal = Object.values(totals).reduce((a, b) => a + b, 0);
+
+  if (!top.length) return null;
+
+  return (
+    <div className="card">
+      <div className="card-head">
+        <div>
+          <div className="card-title">支出深度分析</div>
+          <div className="card-sub muted">前 {top.length} 大類別 · 每月走勢與本期變化</div>
+        </div>
+      </div>
+      <div className="cd-grid">
+        {top.map(([name, sum], idx) => {
+          const series = months.map((m) => m.expenseLines.find((x) => x.name === name)?.amount ?? 0);
+          const last = series[series.length - 1] ?? 0;
+          const prev = series.length > 1 ? (series[series.length - 2] ?? 0) : 0;
+          const trend = prev > 0 ? ((last - prev) / prev) * 100 : 0;
+          const avg = months.length > 0 ? sum / months.length : 0;
+          const isUncat = name === "未分類";
+          const color = isUncat ? "var(--warn)" : `oklch(0.78 0.13 ${155 + idx * 18})`;
+
+          const sw = 240, sh = 36;
+          const maxV = Math.max(...series, 1);
+          const pts = series.map((v, i) => ({
+            x: series.length > 1 ? (i / (series.length - 1)) * sw : sw / 2,
+            y: sh - 2 - (v / maxV) * (sh - 6),
+          }));
+          const path = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+          const area = pts.length > 1 ? `${path} L ${pts[pts.length - 1]!.x} ${sh} L 0 ${sh} Z` : "";
+          const lastPt = pts[pts.length - 1];
+
+          return (
+            <div key={name} className="cd-card">
+              <div className="cd-head">
+                <div className="cd-name">
+                  <span className="swatch" style={{ background: color }}></span>
+                  <span>{name}</span>
+                  {isUncat && <span className="cat-flag">未指派</span>}
+                </div>
+                <div className={`cd-trend${trend < 0 ? " pos" : trend > 0 ? " neg" : ""}`}>
+                  <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <path d={trend >= 0 ? "m6 14 6-6 6 6" : "m6 10 6 6 6-6"}/>
+                  </svg>
+                  {trend >= 0 ? "+" : ""}{trend.toFixed(1)}%
+                </div>
+              </div>
+              <div className="cd-amount">
+                <span className="v">{money(last)}</span>
+                <span className="pct">本月 · 期間 {compactMoney(sum)}</span>
+              </div>
+              <svg className="cd-spark" viewBox={`0 0 ${sw} ${sh}`} preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id={`cdg-${idx}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={color} stopOpacity="0.35"/>
+                    <stop offset="100%" stopColor={color} stopOpacity="0"/>
+                  </linearGradient>
+                </defs>
+                {area && <path d={area} fill={`url(#cdg-${idx})`}/>}
+                <path d={path} fill="none" stroke={color} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round"/>
+                {lastPt && <circle cx={lastPt.x} cy={lastPt.y} r="2.4" fill={color} stroke="var(--bg-elev)" strokeWidth="1.4"/>}
+              </svg>
+              <div className="cd-meta">
+                <span>月均 <strong>{money(avg)}</strong></span>
+                <span>佔支出 <strong>{((sum / Math.max(grandTotal, 1)) * 100).toFixed(1)}%</strong></span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---- Main component ----
+export function StatementsView({ data }: { data: StatementBundle }) {
+  const [period, setPeriod] = useState<Period>("12M");
+  const [activeIdx, setActiveIdx] = useState(Math.max(0, data.months.length - 1));
+
+  const months = useMemo(() => {
+    if (period === "2026") return data.months.filter((m) => m.year === 2026);
+    if (period === "2025") return data.months.filter((m) => m.year === 2025);
+    return data.months.slice(-12);
+  }, [period, data.months]);
+
+  useEffect(() => {
+    if (months.length > 0 && activeIdx >= months.length) {
+      setActiveIdx(months.length - 1);
+    }
+  }, [months.length, activeIdx]);
+
+  const clampedIdx = Math.min(activeIdx, Math.max(0, months.length - 1));
+
+  if (!data.latest) {
     return (
       <>
         <header className="topbar">
           <div>
-            <div className="crumb">三大報表 · Statements</div>
+            <div className="crumb">財務報表 · Financial Reports</div>
             <h1 className="page-title">尚無可用報表</h1>
-          </div>
-          <div className="topbar-actions">
-            <Link className="btn btn-ghost" href="/months/new">
-              新增月份
-            </Link>
           </div>
         </header>
         <div className="empty-state">
           <div className="empty-icon">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 5h16v14H4zM4 9h16M8 5v14" />
+              <path d="M4 19V5M4 19h16M8 15v-4M12 15V8M16 15v-6"/>
             </svg>
           </div>
           <h2>尚無資料</h2>
-          <p className="muted">先建立月份資料後，現金流、損益表與資產負債表才會出現。</p>
+          <p className="muted">先建立月份資料後，財務報表才會出現。</p>
         </div>
       </>
     );
@@ -64,289 +732,62 @@ export function StatementsView({ data }: { data: StatementBundle }) {
     <>
       <header className="topbar">
         <div>
-          <div className="crumb">三大報表 · Statements</div>
+          <div className="crumb">財務報表 · Financial Reports</div>
           <h1 className="page-title">
-            現金流、損益表、資產負債表
-            <span className="page-title-sub"> · {monthLabel(latest.year, latest.month)} 結算</span>
+            一眼看懂錢去哪了
+            <span className="page-title-sub"> · 現金流、損益、淨值與分類分析</span>
           </h1>
         </div>
         <div className="topbar-actions">
-          <Link className="btn btn-ghost" href="/months/new">
-            新增月份
-          </Link>
-          <Link className="btn btn-primary" href="/months">
-            管理月份
-          </Link>
+          <PeriodSwitcher period={period} onPeriod={setPeriod}/>
         </div>
       </header>
 
-      <section className="statement-note card">
-        <div className="statement-note-main">
-          <div className="statement-note-title">報表口徑</div>
-          <p className="muted">
-            這一版以已記錄的月份資料為基礎。現金流與損益表是直接來自收入 / 支出總額；
-            資產負債表則先以已追蹤的現金盈餘、目標存款與投資本金做代理，負債尚未建模。
-          </p>
-        </div>
-        <div className="statement-note-aside">
-          <div className="statement-note-value">{months.length}</div>
-          <div className="muted">個月份已納入</div>
-        </div>
-      </section>
+      <ReportsKPIs months={months} netWorth={data.netWorth} totalAssets={data.trackedAssets} totalLiab={data.trackedLiabilities}/>
 
-      <section className="statement-kpis">
-        <div className="card statement-kpi">
-          <div className="kpi-label">年度收入</div>
-          <div className="kpi-value">{money(data.totalIncome)}</div>
-          <div className="muted">12 個月累計</div>
-        </div>
-        <div className="card statement-kpi">
-          <div className="kpi-label">年度支出</div>
-          <div className="kpi-value neg">{money(data.totalExpense)}</div>
-          <div className="muted">12 個月累計</div>
-        </div>
-        <div className="card statement-kpi">
-          <div className="kpi-label">年度結餘</div>
-          <div className={`kpi-value ${data.totalSurplus >= 0 ? "pos" : "neg"}`}>{money(data.totalSurplus)}</div>
-          <div className="muted">收入減支出</div>
-        </div>
-        <div className="card statement-kpi">
-          <div className="kpi-label">淨值代理</div>
-          <div className="kpi-value">{money(data.netWorth)}</div>
-          <div className="muted">含目標存款與投資本金</div>
-        </div>
-      </section>
-
-      <div className="grid-2 statement-grid">
-        <div className="card statement-chart-card">
-          <div className="card-head">
-            <div>
-              <div className="card-title">現金流現況</div>
-              <div className="card-sub muted">收入、支出與累積現金走勢</div>
-            </div>
-          </div>
-
-          <div className="chart-wrap statement-chart-wrap">
-            <div className="chart-axis">
-              <span>{compactMoney(chartMax)}</span>
-              <span>{compactMoney(chartMax / 2)}</span>
-              <span>0</span>
-              <span>{compactMoney(chartMax / 2)}</span>
-              <span>{compactMoney(chartMax)}</span>
-            </div>
-            <div className="chart-area">
-              <svg viewBox="0 0 100 220" preserveAspectRatio="none" className="chart-svg">
-                <line className="chart-grid" x1="0" x2="100" y1="55" y2="55" />
-                <line className="chart-mid" x1="0" x2="100" y1="110" y2="110" />
-                <line className="chart-grid" x1="0" x2="100" y1="165" y2="165" />
-                {months.map((month, index) => {
-                  const slotW = 100 / months.length;
-                  const barW = slotW * 0.32;
-                  const cx = slotW * index + slotW / 2;
-                  const incomeH = (month.income / chartMax) * 104;
-                  const expenseH = (month.expense / chartMax) * 104;
-                  const active = month.id === latest.id;
-                  return (
-                    <g key={month.id} className={`bar-group ${active ? "active" : ""}`}>
-                      <rect className="bar-income-rect" x={cx - barW} y={110 - incomeH} width={barW} height={incomeH} rx="1.2" />
-                      <rect className="bar-expense-rect" x={cx} y={110} width={barW} height={expenseH} rx="1.2" />
-                      {active ? <circle className="active-marker" cx={cx} cy={110} r="1.6" /> : null}
-                    </g>
-                  );
-                })}
-                {cashPath ? <path d={cashPath} className="statement-cash-path" /> : null}
-              </svg>
-              <div className="chart-labels">
-                {months.map((month, index) => (
-                  <span
-                    key={month.id}
-                    className={`chart-lbl ${month.id === latest.id ? "active" : ""}`}
-                    style={{ width: `${100 / months.length}%` }}
-                  >
-                    {chartLabel(month.year, month.month)}
-                  </span>
-                ))}
-              </div>
-              <div className="statement-legend">
-                <span><span className="bar bar-income"></span>收入</span>
-                <span><span className="bar bar-expense"></span>支出</span>
-                <span><span className="statement-legend-line"></span>累積現金</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="statement-summary">
-            <div className="summary-chip">
-              <span className="muted">最新月份</span>
-              <strong>{monthLabel(latest.year, latest.month)}</strong>
-            </div>
-            <div className="summary-chip">
-              <span className="muted">儲蓄率</span>
-              <strong>{latest.savingsRate != null ? `${latest.savingsRate.toFixed(1)}%` : "—"}</strong>
-            </div>
-            <div className="summary-chip">
-              <span className="muted">累積現金</span>
-              <strong>{money(data.cumulativeCash)}</strong>
-            </div>
-          </div>
-        </div>
-
-        <div className="card statement-side-card">
-          <div className="card-head">
-            <div>
-              <div className="card-title">最新月份拆解</div>
-              <div className="card-sub muted">收入 / 支出分類加總</div>
-            </div>
-          </div>
-
-          <div className="statement-mini-grid">
-            <div className="statement-mini">
-              <div className="statement-mini-label">收入</div>
-              <div className="statement-mini-value pos">{money(latest.income)}</div>
-              <div className="statement-lines">
-                {latest.incomeLines.slice(0, 4).map((line) => (
-                  <div key={`${line.name}-${line.amount}`} className="statement-line">
-                    <span>{line.name}</span>
-                    <strong>{money(line.amount)}</strong>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="statement-mini">
-              <div className="statement-mini-label">支出</div>
-              <div className="statement-mini-value neg">{money(latest.expense)}</div>
-              <div className="statement-lines">
-                {latest.expenseLines.slice(0, 4).map((line) => (
-                  <div key={`${line.name}-${line.amount}`} className="statement-line">
-                    <span>{line.name}</span>
-                    <strong>{money(line.amount)}</strong>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="statement-notes">
-            <div className="statement-note-row">
-              <span className="muted">備註</span>
-              <strong>{latest.note?.trim() ? latest.note : "無"}</strong>
-            </div>
-            <div className="statement-note-row">
-              <span className="muted">累積結餘</span>
-              <strong className={latest.cumulativeSurplus >= 0 ? "pos" : "neg"}>{money(latest.cumulativeSurplus)}</strong>
-            </div>
-            <div className="statement-note-row">
-              <span className="muted">目標存款</span>
-              <strong>{money(data.goalAssets)}</strong>
-            </div>
-          </div>
+      <div className="sec-head">
+        <div>
+          <h2>現金流</h2>
+          <p>每月進帳與花費，疊上累積現金線。</p>
         </div>
       </div>
+      <CashflowChart months={months} activeIdx={clampedIdx} onPick={setActiveIdx}/>
 
-      <div className="grid-2 statement-grid">
-        <div className="card statement-table-card">
-          <div className="card-head">
-            <div>
-              <div className="card-title">損益表</div>
-              <div className="card-sub muted">每月收入、支出與利潤率</div>
-            </div>
-          </div>
-          <div className="table-wrap statement-table-wrap">
-            <table className="recent-table statement-table">
-              <thead>
-                <tr>
-                  <th>月份</th>
-                  <th className="num">收入</th>
-                  <th className="num">支出</th>
-                  <th className="num">結餘</th>
-                  <th className="num">儲蓄率</th>
-                </tr>
-              </thead>
-              <tbody>
-                {months.map((month) => (
-                  <tr key={month.id} className={month.id === latest.id ? "current" : ""}>
-                    <td>
-                      <div className="mo-cell">
-                        <strong>{monthLabel(month.year, month.month)}</strong>
-                        <span className="muted">{monthChinese(month.month)}</span>
-                      </div>
-                    </td>
-                    <td className="num">{money(month.income)}</td>
-                    <td className="num">{money(month.expense)}</td>
-                    <td className={`num ${month.surplus >= 0 ? "pos" : "neg"}`}>{money(month.surplus)}</td>
-                    <td className="num muted">{month.savingsRate != null ? `${month.savingsRate.toFixed(1)}%` : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="card balance-card">
-          <div className="card-head">
-            <div>
-              <div className="card-title">資產負債表</div>
-              <div className="card-sub muted">目前先以已追蹤資產做代理</div>
-            </div>
-          </div>
-
-          <div className="balance-total">
-            <div>
-              <div className="muted">淨值</div>
-              <div className="balance-value">{money(data.netWorth)}</div>
-            </div>
-            <div className="balance-pill">
-              {data.trackedLiabilities === 0 ? "暫無負債資料" : `${liabilityPct.toFixed(1)}% 負債比`}
-            </div>
-          </div>
-
-          <div className="balance-stack">
-            <div className="balance-row">
-              <span>現金盈餘</span>
-              <strong>{money(Math.max(0, data.cumulativeCash))}</strong>
-            </div>
-            <div className="balance-row">
-              <span>目標存款資產</span>
-              <strong>{money(data.goalAssets)}</strong>
-            </div>
-            <div className="balance-row">
-              <span>投資本金</span>
-              <strong>{money(data.investmentAssets)}</strong>
-            </div>
-            <div className="balance-row total">
-              <span>總資產</span>
-              <strong>{money(totalAssets)}</strong>
-            </div>
-            <div className="balance-row">
-              <span>負債</span>
-              <strong className="muted">{money(data.trackedLiabilities)}</strong>
-            </div>
-            <div className="balance-row total">
-              <span>淨值</span>
-              <strong className={data.netWorth >= 0 ? "pos" : "neg"}>{money(data.netWorth)}</strong>
-            </div>
-          </div>
-
-          <div className="balance-breakdown">
-            <div className="balance-bar">
-              <div className="balance-segment balance-cash" style={{ width: `${ratio(Math.max(0, data.cumulativeCash), Math.max(totalAssets, 1))}%` }} />
-              <div className="balance-segment balance-goal" style={{ width: `${ratio(data.goalAssets, Math.max(totalAssets, 1))}%` }} />
-              <div className="balance-segment balance-invest" style={{ width: `${ratio(data.investmentAssets, Math.max(totalAssets, 1))}%` }} />
-            </div>
-            <div className="balance-legend">
-              <span><i className="swatch cash" />現金</span>
-              <span><i className="swatch goal" />目標資產</span>
-              <span><i className="swatch invest" />投資本金</span>
-            </div>
-          </div>
-
-          <p className="statement-foot muted">
-            負債尚未建模，所以這裡是「追蹤中的淨值代理」。要做成真正的資產負債表，下一步應加入房貸、信貸與銀行帳戶餘額資料。
-          </p>
+      <div className="sec-head">
+        <div>
+          <h2>分類 × 月份</h2>
+          <p>每一筆錢的去向 —— 列是類別、欄是月份。深色 = 花得多。</p>
         </div>
       </div>
+      <CategoryHeatmap months={months} activeIdx={clampedIdx}/>
 
-      <footer className="page-foot muted">家庭理財 · Next.js frontend</footer>
+      <div className="sec-head">
+        <div>
+          <h2>損益表</h2>
+          <p>逐月收入、支出、結餘與儲蓄率。</p>
+        </div>
+      </div>
+      <IncomeStatement months={months} activeIdx={clampedIdx} onPick={setActiveIdx}/>
+
+      <div className="sec-head">
+        <div>
+          <h2>資產負債表</h2>
+          <p>現有資產組成、負債與淨值代理。</p>
+        </div>
+      </div>
+      <BalanceSheet data={data}/>
+
+      <div className="sec-head">
+        <div>
+          <h2>支出深度分析</h2>
+          <p>前 8 大支出類別、每月走勢與本期變化。</p>
+        </div>
+      </div>
+      <CategoryDeepDive months={months}/>
+
+      <footer className="page-foot muted">
+        家庭理財 · 共享帳本 · 財務報表
+      </footer>
     </>
   );
 }

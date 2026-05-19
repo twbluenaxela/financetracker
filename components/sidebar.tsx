@@ -15,8 +15,8 @@ const items = [
   {
     id: "statements",
     href: "/statements",
-    label: "三大報表",
-    icon: "M4 5h16v14H4zM7 9h10M7 13h7M7 17h5",
+    label: "財務報表",
+    icon: "M4 19V5M4 19h16M8 15v-4M12 15V8M16 15v-6",
   },
   {
     id: "months",
