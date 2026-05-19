@@ -69,7 +69,7 @@ export function Sidebar({
   const [isPending, startTransition] = useTransition();
   const active = activeFromPath(pathname);
   const display = userDisplay(user.email ?? user.uid);
-  const initial = display.slice(0, 1).toUpperCase();
+  const initial = display[0];
   const onSettings = pathname.startsWith("/settings");
 
   async function logout() {
@@ -99,14 +99,15 @@ export function Sidebar({
         <div className="brand-text">
           <div className="brand-name">家庭理財</div>
         </div>
-        <button className="sidebar-toggle" type="button" onClick={onToggle} aria-label={collapsed ? "展開側欄" : "收合側欄"} title={collapsed ? "展開側欄" : "收合側欄"}>
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            {collapsed
-              ? <path d="M9 18l6-6-6-6"/>
-              : <path d="M15 18l-6-6 6-6"/>}
-          </svg>
-        </button>
       </div>
+
+      <button className="sidebar-toggle" type="button" onClick={onToggle} aria-label={collapsed ? "展開側欄" : "收合側欄"} title={collapsed ? "展開側欄" : "收合側欄"}>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          {collapsed
+            ? <path d="M9 18l6-6-6-6"/>
+            : <path d="M15 18l-6-6 6-6"/>}
+        </svg>
+      </button>
 
       <nav className="nav">
         {items.map((item) => (

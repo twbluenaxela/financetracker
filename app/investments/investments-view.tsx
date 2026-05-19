@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 // ─── constants ───────────────────────────────────────────────────────────────
@@ -32,6 +33,7 @@ type Ticker = {
 };
 
 type Holding = { symbol: string; qty: number; costAvg: number };
+type HoldingRow = { id: number; symbol: string; qty: number; costAvg: number; currency: string };
 
 // ─── mock data ────────────────────────────────────────────────────────────────
 
@@ -57,14 +59,6 @@ const TICKERS: Record<string, Ticker> = {
   "2412":   { name: "中華電信",                region: "TW",   price: 118.50, currency: "TWD", dayChg:-0.08, w1:-0.4,  m1:+0.6,  m3:+2.1,  y1: +5.8, pe:26.3, yld:5.2, aum:null,             health:"C", signal:"賣", aiNote:"殖利率誘人但成長停滯，PE 偏高" },
 };
 
-const HOLDINGS_DATA: Holding[] = [
-  { symbol: "2330",  qty: 100, costAvg:  850.0 },
-  { symbol: "0050",  qty: 500, costAvg:  145.2 },
-  { symbol: "VT",    qty:  80, costAvg:   96.4 },
-  { symbol: "BNDW",  qty: 120, costAvg:   62.8 },
-  { symbol: "2454",  qty:  50, costAvg: 1180.0 },
-  { symbol: "BND",   qty:  60, costAvg:   71.2 },
-];
 
 const CAROUSEL_ROWS = [
   { label: "台股市值型 ETF", symbols: ["0050", "006208", "0056", "00878"] },
@@ -428,16 +422,182 @@ function DetailDrawer({
   );
 }
 
+// ─── add/edit holding modal ───────────────────────────────────────────────────
+
+const SYMBOL_OPTIONS = Object.entries(TICKERS).map(([sym, t]) => ({
+  sym, label: `${sym} · ${t.name}`, currency: t.currency,
+}));
+
+function HoldingModal({
+  existing,
+  onClose,
+  onSaved,
+  onDeleted,
+}: {
+  existing: HoldingRow | null;
+  onClose: () => void;
+  onSaved: (h: HoldingRow) => void;
+  onDeleted?: (id: number) => void;
+}) {
+  const [symbol, setSymbol]   = useState(existing?.symbol ?? "");
+  const [qty,    setQty]      = useState(existing ? String(existing.qty) : "");
+  const [cost,   setCost]     = useState(existing ? String(existing.costAvg) : "");
+  const [saving, setSaving]   = useState(false);
+  const [error,  setError]    = useState<string | null>(null);
+
+  const symUp = symbol.trim().toUpperCase();
+  const ticker = TICKERS[symUp];
+  const currency: "TWD" | "USD" = ticker?.currency ?? (existing?.currency as "TWD" | "USD") ?? "TWD";
+  const currencyLabel = currency === "USD" ? "USD ($)" : "TWD (NT$)";
+
+  async function handleSave() {
+    const qtyNum  = parseFloat(qty.replace(/,/g, ""));
+    const costNum = parseFloat(cost.replace(/,/g, ""));
+    if (!symUp || isNaN(qtyNum) || qtyNum <= 0 || isNaN(costNum) || costNum <= 0) {
+      setError("請填寫所有欄位（數量與成本均需大於 0）");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    const res = await fetch("/api/holdings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ symbol: symUp, qty: qtyNum, costAvg: costNum, currency }),
+    });
+    if (!res.ok) { setError("儲存失敗，請稍後再試"); setSaving(false); return; }
+    const data = await res.json();
+    onSaved(data.holding as HoldingRow);
+    onClose();
+  }
+
+  async function handleDelete() {
+    if (!existing || !onDeleted) return;
+    if (!window.confirm(`確定要刪除 ${existing.symbol} 持倉？`)) return;
+    setSaving(true);
+    await fetch(`/api/holdings/${existing.id}`, { method: "DELETE" });
+    onDeleted(existing.id);
+    onClose();
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+        <header className="modal-head">
+          <div>
+            <div className="crumb">投資組合</div>
+            <h2 className="modal-title">{existing ? "編輯持倉" : "新增持倉"}</h2>
+          </div>
+          <button className="icon-btn" onClick={onClose} aria-label="關閉">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </header>
+
+        <div className="modal-body">
+          <div className="ff-group">
+            <label className="ff-label">標的代號</label>
+            <input
+              className="ff-input"
+              list="holding-symbols"
+              value={symbol}
+              onChange={(e) => setSymbol(e.target.value)}
+              placeholder="例：0050、VT、BNDW"
+              disabled={!!existing}
+              style={existing ? { opacity: 0.6 } : {}}
+            />
+            <datalist id="holding-symbols">
+              {SYMBOL_OPTIONS.map((o) => (
+                <option key={o.sym} value={o.sym}>{o.label}</option>
+              ))}
+            </datalist>
+            {ticker && (
+              <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4 }}>
+                {ticker.name} · {currencyLabel} · 現價 {priceStr(ticker.price, ticker.currency)}
+              </div>
+            )}
+          </div>
+
+          <div className="ff-row-2">
+            <div className="ff-group">
+              <label className="ff-label">持有數量</label>
+              <input
+                className="ff-input num"
+                type="number"
+                min="0"
+                step="any"
+                value={qty}
+                onChange={(e) => setQty(e.target.value)}
+                placeholder="例：100"
+              />
+            </div>
+            <div className="ff-group">
+              <label className="ff-label">成本均價 ({currency})</label>
+              <input
+                className="ff-input num"
+                type="number"
+                min="0"
+                step="any"
+                value={cost}
+                onChange={(e) => setCost(e.target.value)}
+                placeholder={currency === "USD" ? "例：96.40" : "例：145.20"}
+              />
+            </div>
+          </div>
+
+          {error && <div style={{ fontSize: 12, color: "var(--neg)", marginTop: 4 }}>{error}</div>}
+        </div>
+
+        <div className="modal-foot">
+          {existing && onDeleted && (
+            <button className="btn btn-sm" style={{ color: "var(--neg)", borderColor: "var(--neg-soft)" }} type="button" onClick={handleDelete} disabled={saving}>
+              刪除
+            </button>
+          )}
+          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+            <button className="btn btn-sm" type="button" onClick={onClose}>取消</button>
+            <button className="btn btn-sm btn-primary" type="button" onClick={handleSave} disabled={saving}>
+              {saving ? "儲存中…" : "儲存"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── main view ────────────────────────────────────────────────────────────────
 
-export function InvestmentsView() {
-  const [search, setSearch] = useState("");
-  const [drawerSymbol, setDrawerSymbol] = useState<string | null>(null);
-  const [watchlist, setWatchlist] = useState<Set<string>>(() => new Set(["VT", "0050"]));
-  const [holdingsSort, setHoldingsSort] = useState<"alloc" | "pnl">("alloc");
+export function InvestmentsView({ initialHoldings }: { initialHoldings: HoldingRow[] }) {
+  const router = useRouter();
+  const [holdings, setHoldings]           = useState<HoldingRow[]>(initialHoldings);
+  const [search, setSearch]               = useState("");
+  const [drawerSymbol, setDrawerSymbol]   = useState<string | null>(null);
+  const [watchlist, setWatchlist]         = useState<Set<string>>(() => new Set(["VT", "0050"]));
+  const [holdingsSort, setHoldingsSort]   = useState<"alloc" | "pnl">("alloc");
+  const [modalOpen, setModalOpen]         = useState(false);
+  const [editingHolding, setEditingHolding] = useState<HoldingRow | null>(null);
+
+  function openAdd() { setEditingHolding(null); setModalOpen(true); }
+  function openEdit(h: HoldingRow) { setEditingHolding(h); setModalOpen(true); }
+  function closeModal() { setModalOpen(false); setEditingHolding(null); }
+
+  function handleSaved(h: HoldingRow) {
+    setHoldings((prev) => {
+      const idx = prev.findIndex((x) => x.id === h.id || x.symbol === h.symbol);
+      if (idx >= 0) { const next = [...prev]; next[idx] = h; return next; }
+      return [...prev, h];
+    });
+    router.refresh();
+  }
+
+  function handleDeleted(id: number) {
+    setHoldings((prev) => prev.filter((x) => x.id !== id));
+    router.refresh();
+  }
 
   const computedHoldings = useMemo(() =>
-    HOLDINGS_DATA.map((h) => {
+    holdings.filter((h) => TICKERS[h.symbol]).map((h) => {
       const t = TICKERS[h.symbol]!;
       const mvLocal = t.price * h.qty;
       const mvTWD   = toTWD(mvLocal, t.currency);
@@ -445,7 +605,7 @@ export function InvestmentsView() {
       const pnl     = mvTWD - costTWD;
       const pnlPct  = (pnl / costTWD) * 100;
       return { ...h, t, mvTWD, pnl, pnlPct };
-    }), []);
+    }), [holdings]);
 
   const totalMV = useMemo(() => computedHoldings.reduce((a, h) => a + h.mvTWD, 0), [computedHoldings]);
 
@@ -539,11 +699,11 @@ export function InvestmentsView() {
             </svg>
             匯入交易
           </button>
-          <button className="btn btn-primary">
+          <button className="btn btn-primary" onClick={openAdd}>
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <path d="M12 5v14M5 12h14" />
             </svg>
-            新增持股
+            新增持倉
           </button>
         </div>
       </div>
@@ -681,59 +841,80 @@ export function InvestmentsView() {
             <button className={`seg-btn${holdingsSort === "pnl"   ? " active" : ""}`} onClick={() => setHoldingsSort("pnl")}>損益</button>
           </div>
         </div>
-        <div style={{ overflowX: "auto" }}>
-          <table className="inv-holdings-table">
-            <thead>
-              <tr>
-                <th style={{ textAlign: "left" }}>標的</th>
-                <th>持有量</th>
-                <th>成本均價</th>
-                <th>現價</th>
-                <th>市值 TWD</th>
-                <th>未實現損益</th>
-                <th>配置</th>
-                <th>走勢</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedHoldings.map((h) => {
-                const allocPct = totalMV > 0 ? (h.mvTWD / totalMV) * 100 : 0;
-                return (
-                  <tr key={h.symbol} className="inv-holdings-row" onClick={() => setDrawerSymbol(h.symbol)}>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <RegionTag region={h.t.region} />
-                        <div>
-                          <div className="num" style={{ fontWeight: 700, fontSize: 13 }}>{h.symbol}</div>
-                          <div style={{ fontSize: 11, color: "var(--muted)" }}>{h.t.name}</div>
+        {sortedHoldings.length === 0 ? (
+          <div style={{ padding: "32px 0", textAlign: "center", color: "var(--muted)" }}>
+            <div style={{ fontSize: 14, marginBottom: 10 }}>尚未新增任何持倉</div>
+            <button className="btn btn-primary btn-sm" onClick={openAdd}>+ 新增第一筆持倉</button>
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table className="inv-holdings-table">
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left" }}>標的</th>
+                  <th>持有量</th>
+                  <th>成本均價</th>
+                  <th>現價</th>
+                  <th>市值 TWD</th>
+                  <th>未實現損益</th>
+                  <th>配置</th>
+                  <th>走勢</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedHoldings.map((h) => {
+                  const allocPct = totalMV > 0 ? (h.mvTWD / totalMV) * 100 : 0;
+                  return (
+                    <tr key={h.symbol} className="inv-holdings-row" onClick={() => setDrawerSymbol(h.symbol)}>
+                      <td style={{ textAlign: "left" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <RegionTag region={h.t.region} />
+                          <div>
+                            <div className="num" style={{ fontWeight: 700, fontSize: 13 }}>{h.symbol}</div>
+                            <div style={{ fontSize: 11, color: "var(--muted)" }}>{h.t.name}</div>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="num">{h.qty.toLocaleString("zh-TW")}</td>
-                    <td className="num">{priceStr(h.costAvg, h.t.currency)}</td>
-                    <td className="num">{priceStr(h.t.price, h.t.currency)}</td>
-                    <td className="num">{fmtTWD(h.mvTWD, true)}</td>
-                    <td>
-                      <div className={`num ${h.pnl >= 0 ? "pos" : "neg"}`} style={{ fontSize: 12, textAlign: "right" }}>{fmtTWD(h.pnl, true)}</div>
-                      <div className={`num ${h.pnlPct >= 0 ? "pos" : "neg"}`} style={{ fontSize: 10.5, textAlign: "right" }}>{pct(h.pnlPct, 1)}</div>
-                    </td>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
-                        <span className="num" style={{ fontSize: 12 }}>{allocPct.toFixed(1)}%</span>
-                        <div style={{ width: 36, height: 4, borderRadius: 99, background: "var(--border-strong)", overflow: "hidden" }}>
-                          <div style={{ width: `${Math.min(100, allocPct * 3)}%`, height: "100%", background: "var(--accent)", borderRadius: 99 }} />
+                      </td>
+                      <td className="num">{h.qty.toLocaleString("zh-TW")}</td>
+                      <td className="num">{priceStr(h.costAvg, h.t.currency)}</td>
+                      <td className="num">{priceStr(h.t.price, h.t.currency)}</td>
+                      <td className="num">{fmtTWD(h.mvTWD, true)}</td>
+                      <td>
+                        <div className={`num ${h.pnl >= 0 ? "pos" : "neg"}`} style={{ fontSize: 12, textAlign: "right" }}>{fmtTWD(h.pnl, true)}</div>
+                        <div className={`num ${h.pnlPct >= 0 ? "pos" : "neg"}`} style={{ fontSize: 10.5, textAlign: "right" }}>{pct(h.pnlPct, 1)}</div>
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+                          <span className="num" style={{ fontSize: 12 }}>{allocPct.toFixed(1)}%</span>
+                          <div style={{ width: 36, height: 4, borderRadius: 99, background: "var(--border-strong)", overflow: "hidden" }}>
+                            <div style={{ width: `${Math.min(100, allocPct * 3)}%`, height: "100%", background: "var(--accent)", borderRadius: 99 }} />
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td>
-                      <Sparkline symbol={h.symbol} color={h.pnl >= 0 ? "var(--pos)" : "var(--neg)"} w={58} h={22} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      </td>
+                      <td>
+                        <Sparkline symbol={h.symbol} color={h.pnl >= 0 ? "var(--pos)" : "var(--neg)"} w={58} h={22} />
+                      </td>
+                      <td>
+                        <button
+                          className="icon-btn ghost"
+                          style={{ width: 24, height: 24, opacity: 0.5 }}
+                          onClick={(e) => { e.stopPropagation(); openEdit(h); }}
+                          title="編輯持倉"
+                        >
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* ── recommendations ── */}
@@ -838,6 +1019,16 @@ export function InvestmentsView() {
         onWatch={toggleWatch}
         onClose={() => setDrawerSymbol(null)}
       />
+
+      {/* ── add/edit holding modal ── */}
+      {modalOpen && (
+        <HoldingModal
+          existing={editingHolding}
+          onClose={closeModal}
+          onSaved={handleSaved}
+          onDeleted={handleDeleted}
+        />
+      )}
     </main>
   );
 }

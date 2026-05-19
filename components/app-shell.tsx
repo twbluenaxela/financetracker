@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 import { Sidebar } from "@/components/sidebar";
 

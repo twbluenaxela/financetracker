@@ -27,8 +27,25 @@ model Household {
   monthlySummaries MonthlySummary[]
   goals            Goal[]
   investmentPlans  InvestmentPlan[]
+  holdings         Holding[]
 
   @@map("households")
+}
+
+model Holding {
+  id          Int      @id @default(autoincrement())
+  householdId Int      @map("household_id")
+  symbol      String   @db.VarChar(20)
+  qty         Decimal  @db.Decimal(14, 6)
+  costAvg     Decimal  @map("cost_avg") @db.Decimal(14, 4)
+  currency    String   @default("TWD") @db.VarChar(3)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  household Household @relation(fields: [householdId], references: [id])
+
+  @@unique([householdId, symbol])
+  @@map("holdings")
 }
 
 model HouseholdMember {
