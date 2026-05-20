@@ -186,7 +186,7 @@ The goals page pairs a React Server Component (`app/(protected)/goals/page.tsx`)
 | `world` | 全球股市 ETF | VT | 7.9% | USD | You (Schwab) |
 | `twStock` | 台股市值型 ETF | 0050 | 7.5% | TWD | Wife only |
 
-BNDW and VT carry `fxRisk: true` (USD-denominated, bought via Schwab wire). 0050 is PFIC for N — tagged in the UI and warned in the advisor chat.
+BNDW and VT carry `fxRisk: true` (USD-denominated, bought via Schwab wire). 0050 is PFIC for 在台的美國公民 — tagged in the UI and warned in the advisor chat.
 
 *Allocation recipes* — `RECIPES` constant, Boglehead-grounded:
 - 短期: conservative/moderate = 100% cash; aggressive = 85% cash / 15% bond
@@ -201,7 +201,7 @@ BNDW and VT carry `fxRisk: true` (USD-denominated, bought via Schwab wire). 0050
 - Model list fetched live at modal open from `GET /api/chat/models`; static fallback list if fetch fails
 - Default model: `gemini-3-flash-preview`
 
-**PFIC constraint** — N cannot hold Taiwan-domiciled ETFs (0050, 00679B, 00720B, etc.); they are PFICs and trigger Form 8621 + up to 37% punitive tax. Only J can hold them. The advisor system prompt encodes this and surfaces warnings in the UI.
+**PFIC constraint** — 在台的美國公民 cannot hold Taiwan-domiciled ETFs (0050, 00679B, 00720B, etc.); they are PFICs and trigger Form 8621 + up to 37% punitive tax. Only 台灣人 can hold them. The advisor system prompt encodes this and surfaces warnings in the UI.
 
 - **Robo-advisor** — Gemini API integration for AI financial advice. `GEMINI_API_KEY` must be set in env.
 
