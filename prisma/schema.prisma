@@ -142,3 +142,30 @@ model InvestmentPlan {
 
   @@map("investment_plans")
 }
+
+model StockQuote {
+  symbol    String   @id @db.VarChar(20)
+  price     Decimal  @db.Decimal(14, 4)
+  dayChg    Decimal  @map("day_chg") @db.Decimal(8, 4)
+  pe        Decimal? @db.Decimal(10, 2)
+  yld       Decimal? @db.Decimal(8, 4)
+  aum       Decimal? @db.Decimal(16, 4)
+  high52w   Decimal  @map("high_52w") @db.Decimal(14, 4)
+  low52w    Decimal  @map("low_52w") @db.Decimal(14, 4)
+  currency  String   @default("USD") @db.VarChar(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("stock_quotes")
+}
+
+model StockHistory {
+  symbol String   @db.VarChar(20)
+  date   DateTime @db.Date
+  close  Decimal  @db.Decimal(14, 4)
+  open   Decimal? @db.Decimal(14, 4)
+  high   Decimal? @db.Decimal(14, 4)
+  low    Decimal? @db.Decimal(14, 4)
+
+  @@id([symbol, date])
+  @@map("stock_history")
+}

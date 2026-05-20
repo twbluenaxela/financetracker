@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { NewsItem } from "@/app/api/quotes/news/route";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { CAROUSEL_ROWS } from "@/lib/ticker-meta";
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
-const USD_TWD = 31.5;
+const USD_TWD_FALLBACK = 31.5;
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -16,7 +18,7 @@ type Signal = "買" | "守" | "賣";
 type Health = "A" | "B" | "C";
 type Range = "1M" | "3M" | "1Y" | "5Y";
 
-type Ticker = {
+export type Ticker = {
   name: string;
   region: Region;
   price: number;
@@ -27,46 +29,14 @@ type Ticker = {
   yld: number | null;
   aum: number | null;
   er?: number;
+  high52w: number;
+  low52w: number;
   health: Health;
   signal: Signal;
   aiNote: string;
 };
 
-type Holding = { symbol: string; qty: number; costAvg: number };
 type HoldingRow = { id: number; symbol: string; qty: number; costAvg: number; currency: string };
-
-// ─── mock data ────────────────────────────────────────────────────────────────
-
-const TICKERS: Record<string, Ticker> = {
-  "0050":   { name: "元大台灣50",              region: "TW",   price: 178.50, currency: "TWD", dayChg:+0.84, w1:+1.2,  m1:+3.4,  m3:+8.1,  y1:+22.5, pe:16.2, yld:3.2, aum:2800, er:0.43, health:"A", signal:"買", aiNote:"台灣大盤核心，估值合理，長期定期定額首選" },
-  "006208": { name: "富邦台50",                region: "TW",   price:  95.20, currency: "TWD", dayChg:+0.79, w1:+1.1,  m1:+3.2,  m3:+7.9,  y1:+22.1, pe:16.0, yld:3.3, aum: 320, er:0.09, health:"A", signal:"買", aiNote:"0050 費率更低替代，長期績效近乎相同" },
-  "0056":   { name: "元大高股息",              region: "TW",   price:  38.60, currency: "TWD", dayChg:-0.26, w1:-0.3,  m1:+1.8,  m3:+4.2,  y1:+12.4, pe:14.8, yld:7.1, aum:3100, er:0.34, health:"B", signal:"守", aiNote:"高息但成長較慢，適合退休族配置" },
-  "00878":  { name: "國泰永續高股息",          region: "TW",   price:  21.80, currency: "TWD", dayChg:+0.46, w1:+0.8,  m1:+2.1,  m3:+5.6,  y1:+15.3, pe:15.5, yld:6.8, aum:2200, er:0.16, health:"B", signal:"守", aiNote:"ESG 篩選 + 高息，配置偏防守" },
-  "VT":     { name: "Vanguard Total World",    region: "US",   price: 118.40, currency: "USD", dayChg:+0.38, w1:+0.9,  m1:+2.8,  m3:+7.4,  y1:+19.6, pe:17.8, yld:2.1, aum: 42.6, er:0.07, health:"A", signal:"買", aiNote:"全球分散首選，費率超低，Bogleheads 核心持股" },
-  "VOO":    { name: "Vanguard S&P 500",        region: "US",   price: 548.20, currency: "USD", dayChg:+0.52, w1:+1.2,  m1:+3.6,  m3:+9.1,  y1:+24.2, pe:22.4, yld:1.3, aum: 531,  er:0.03, health:"B", signal:"守", aiNote:"標普 500 估值偏高但動能強，短期觀望" },
-  "VTI":    { name: "Vanguard Total US",       region: "US",   price: 286.50, currency: "USD", dayChg:+0.41, w1:+0.9,  m1:+3.2,  m3:+8.4,  y1:+22.8, pe:21.6, yld:1.4, aum: 440,  er:0.03, health:"B", signal:"守", aiNote:"美國全市場，含更多中小型股" },
-  "QQQ":    { name: "Invesco Nasdaq-100",      region: "US",   price: 512.80, currency: "USD", dayChg:+0.68, w1:+1.6,  m1:+5.1,  m3:+12.4, y1:+31.5, pe:30.2, yld:0.6, aum: 298,  er:0.20, health:"C", signal:"賣", aiNote:"科技集中過高、估值偏貴，波動風險大" },
-  "SMH":    { name: "VanEck Semiconductor",    region: "US",   price: 248.60, currency: "USD", dayChg:+1.24, w1:+3.1,  m1:+8.4,  m3:+18.6, y1:+42.1, pe:28.4, yld:0.9, aum:  22.4, er:0.35, health:"B", signal:"守", aiNote:"半導體主題，台積電受益，高波動高報酬" },
-  "SOXX":   { name: "iShares Semiconductor",   region: "US",   price: 218.40, currency: "USD", dayChg:+1.18, w1:+2.8,  m1:+7.9,  m3:+17.2, y1:+39.8, pe:27.1, yld:1.0, aum:  13.2, er:0.35, health:"B", signal:"守", aiNote:"SMH 替代選擇，覆蓋範圍更廣" },
-  "XLK":    { name: "Technology Select SPDR",  region: "US",   price: 224.80, currency: "USD", dayChg:+0.74, w1:+1.8,  m1:+5.6,  m3:+14.2, y1:+33.4, pe:32.1, yld:0.7, aum:  68.4, er:0.08, health:"C", signal:"賣", aiNote:"AAPL+MSFT 集中度高，估值過貴" },
-  "AIQ":    { name: "Global X AI & Tech",      region: "US",   price:  46.20, currency: "USD", dayChg:+1.02, w1:+2.4,  m1:+6.8,  m3:+16.4, y1:+38.2, pe:29.8, yld:0.4, aum:   2.8, er:0.68, health:"B", signal:"守", aiNote:"AI 主題分散尚可，費率偏高需注意" },
-  "BND":    { name: "Vanguard Total Bond",     region: "BOND", price:  72.40, currency: "USD", dayChg:-0.12, w1:-0.3,  m1:+0.8,  m3:+2.1,  y1: +4.6, pe:null, yld:4.8, aum: 116,  er:0.03, health:"A", signal:"買", aiNote:"美國全債市，降息環境受益，防禦性核心" },
-  "BNDW":   { name: "Vanguard World Bond",     region: "BOND", price:  68.80, currency: "USD", dayChg:-0.09, w1:-0.2,  m1:+0.6,  m3:+1.8,  y1: +4.2, pe:null, yld:4.6, aum:  18.6, er:0.05, health:"A", signal:"買", aiNote:"全球債券分散，利率風險更低" },
-  "00679B": { name: "元大美債20年",            region: "BOND", price:  32.10, currency: "TWD", dayChg:-0.31, w1:-0.6,  m1:+1.2,  m3:+3.4,  y1: +8.2, pe:null, yld:5.1, aum:  68,   er:0.15, health:"B", signal:"守", aiNote:"長債波動大，降息有利但時機難抓" },
-  "TLT":    { name: "iShares 20+ Treasury",    region: "BOND", price:  88.60, currency: "USD", dayChg:-0.22, w1:-0.5,  m1:+1.4,  m3:+3.8,  y1: +7.8, pe:null, yld:4.9, aum:  52.4, er:0.15, health:"B", signal:"守", aiNote:"20年期美債，高利率環境下波動顯著" },
-  "2330":   { name: "台積電",                  region: "TW",   price:1025.00, currency: "TWD", dayChg:+1.47, w1:+3.2,  m1:+8.6,  m3:+15.2, y1:+48.3, pe:24.1, yld:1.6, aum:null,             health:"B", signal:"守", aiNote:"AI 受惠龍頭但估值偏高，逢回再加碼" },
-  "2454":   { name: "聯發科",                  region: "TW",   price:1380.00, currency: "TWD", dayChg:+0.73, w1:+1.8,  m1:+4.9,  m3:+9.4,  y1:+28.7, pe:18.4, yld:3.1, aum:null,             health:"A", signal:"買", aiNote:"手機 AP 龍頭，AI 邊緣端受益，估值合理" },
-  "2412":   { name: "中華電信",                region: "TW",   price: 118.50, currency: "TWD", dayChg:-0.08, w1:-0.4,  m1:+0.6,  m3:+2.1,  y1: +5.8, pe:26.3, yld:5.2, aum:null,             health:"C", signal:"賣", aiNote:"殖利率誘人但成長停滯，PE 偏高" },
-};
-
-
-const CAROUSEL_ROWS = [
-  { label: "台股市值型 ETF", symbols: ["0050", "006208", "0056", "00878"] },
-  { label: "美股大盤 ETF",   symbols: ["VT", "VOO", "VTI", "QQQ"] },
-  { label: "美股主題 ETF",   symbols: ["SMH", "SOXX", "XLK", "AIQ"] },
-  { label: "債券 ETF",       symbols: ["BND", "BNDW", "00679B", "TLT"] },
-  { label: "台股權值股",     symbols: ["2330", "2454", "2412"] },
-] as const;
 
 const TARGET_ALLOC: Record<string, number> = { 台股: 25, 美股: 45, 債券: 20, 現金: 10 };
 const ALLOC_CATS = ["台股", "美股", "債券", "現金"] as const;
@@ -74,52 +44,10 @@ const ALLOC_COLORS: Record<string, string> = {
   台股: "var(--pos)", 美股: "var(--info)", 債券: "var(--warn)", 現金: "var(--faint)",
 };
 
-const MOCK_NEWS: Record<string, { title: string; date: string }[]> = {
-  "2330": [
-    { title: "台積電 Q1 法說：AI 伺服器需求超預期，上修全年展望", date: "2026/05/14" },
-    { title: "CoWoS 先進封裝產能持續擴充，供給仍吃緊", date: "2026/05/08" },
-    { title: "亞利桑那廠進入風險試產，良率優於預期", date: "2026/04/28" },
-  ],
-  "VT": [
-    { title: "聯準會暗示年底前仍有降息空間，全球股市受惠", date: "2026/05/17" },
-    { title: "VT 受惠全球資金回流，近月淨流入創近期新高", date: "2026/05/10" },
-    { title: "Vanguard 小幅調整 VT 成分股比重，美股持倉微降", date: "2026/05/02" },
-  ],
-};
-function getMockNews(symbol: string) {
-  return (
-    MOCK_NEWS[symbol] ?? [
-      { title: `${symbol} 受惠全球資金回流，近日交易量明顯放大`, date: "2026/05/16" },
-      { title: `分析師維持 ${symbol} 目標區間，關注下季財報`, date: "2026/05/10" },
-      { title: "聯準會暗示降息空間，成長型資產受惠", date: "2026/05/02" },
-    ]
-  );
-}
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function seededRng(seed: number) {
-  let s = Math.abs(seed % 2147483647) || 1;
-  return () => {
-    s = (s * 16807) % 2147483647;
-    return (s - 1) / 2147483646;
-  };
-}
-
 const RANGE_POINTS: Record<Range, number> = { "1M": 22, "3M": 65, "1Y": 252, "5Y": 260 };
-
-function genHistory(symbol: string, points: number, endPrice: number, annualY1: number): number[] {
-  const seed = symbol.split("").reduce((a, c) => a * 31 + c.charCodeAt(0), 7);
-  const rng = seededRng(seed);
-  const dailyDrift = (annualY1 / 100) / 252;
-  const dailyVol = 0.013;
-  const arr: number[] = [endPrice];
-  for (let i = 1; i < points; i++) {
-    const shock = (rng() - 0.5) * 2 * dailyVol;
-    arr.unshift(arr[0]! * (1 - dailyDrift - shock));
-  }
-  return arr;
-}
 
 function sparklinePath(data: number[], w: number, h: number): string {
   if (data.length < 2) return "";
@@ -155,8 +83,8 @@ function fmtTWD(n: number, compact = false): string {
   return "NT$" + Math.round(n).toLocaleString("zh-TW");
 }
 
-function toTWD(amount: number, currency: Currency): number {
-  return currency === "USD" ? amount * USD_TWD : amount;
+function toTWD(amount: number, currency: Currency, rate: number): number {
+  return currency === "USD" ? amount * rate : amount;
 }
 
 function pct(n: number, dp = 2): string {
@@ -194,9 +122,22 @@ function RegionTag({ region }: { region: Region }) {
   );
 }
 
-function Sparkline({ symbol, color, w = 80, h = 28 }: { symbol: string; color: string; w?: number; h?: number }) {
-  const t = TICKERS[symbol]!;
-  const data = useMemo(() => genHistory(symbol, 30, t.price, t.y1), [symbol, t.price, t.y1]);
+function Sparkline({ symbol, color, w = 80, h = 28, tickers, historyMap }: {
+  symbol: string;
+  color: string;
+  w?: number;
+  h?: number;
+  tickers: Record<string, Ticker>;
+  historyMap: Record<string, number[]>;
+}) {
+  const data = useMemo(() => {
+    const hist = historyMap[symbol] ?? [];
+    if (hist.length >= 2) return hist.slice(-30);
+    // fallback: flat line at current price
+    const t = tickers[symbol];
+    const price = t?.price ?? 1;
+    return Array(30).fill(price);
+  }, [symbol, tickers, historyMap]);
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: "block", flexShrink: 0 }}>
       <path d={sparklinePath(data, w, h)} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -204,19 +145,27 @@ function Sparkline({ symbol, color, w = 80, h = 28 }: { symbol: string; color: s
   );
 }
 
-function PriceChart({ symbol, range }: { symbol: string; range: Range }) {
-  const t = TICKERS[symbol]!;
+function PriceChart({ symbol, range, tickers, historyMap }: {
+  symbol: string;
+  range: Range;
+  tickers: Record<string, Ticker>;
+  historyMap: Record<string, number[]>;
+}) {
+  const t = tickers[symbol]!;
   const W = 360, H = 140;
-  const data = useMemo(
-    () => genHistory(symbol, RANGE_POINTS[range], t.price, t.y1),
-    [symbol, range, t.price, t.y1],
-  );
+  const points = RANGE_POINTS[range];
+  const data = useMemo(() => {
+    const hist = historyMap[symbol] ?? [];
+    if (hist.length >= 2) return hist.slice(-points);
+    const price = t?.price ?? 1;
+    return Array(Math.min(points, 10)).fill(price);
+  }, [symbol, range, historyMap, t?.price, points]);
   const isPos = data[data.length - 1]! >= data[0]!;
   const strokeColor = isPos ? "var(--pos)" : "var(--neg)";
   const fillColor = isPos ? "var(--pos-soft)" : "var(--neg-soft)";
   const { line, area } = chartPath(data, W, H);
   const min = Math.min(...data), max = Math.max(...data);
-  const fmtLabel = (v: number) => t.currency === "USD" ? `$${v.toFixed(2)}` : v.toFixed(0);
+  const fmtLabel = (v: number) => t?.currency === "USD" ? `$${v.toFixed(2)}` : v.toFixed(0);
   const toX = (i: number) => ((i / (data.length - 1)) * (W - 32) + 16).toFixed(1);
   const toY = (v: number) => (H - 24 - ((v - min) / Math.max(max - min, 0.001)) * (H - 48)).toFixed(1);
   return (
@@ -225,7 +174,7 @@ function PriceChart({ symbol, range }: { symbol: string; range: Range }) {
       <path d={line}  fill="none" stroke={strokeColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       <text x="18" y={+toY(max) - 4}  fill="var(--faint)" fontSize="9">{fmtLabel(max)}</text>
       <text x="18" y={+toY(min) + 12} fill="var(--faint)" fontSize="9">{fmtLabel(min)}</text>
-      <circle cx={toX(data.length - 1)} cy={toY(t.price)} r="3" fill={strokeColor} />
+      <circle cx={toX(data.length - 1)} cy={toY(t?.price ?? 0)} r="3" fill={strokeColor} />
     </svg>
   );
 }
@@ -233,14 +182,17 @@ function PriceChart({ symbol, range }: { symbol: string; range: Range }) {
 // ─── ticker card ──────────────────────────────────────────────────────────────
 
 function TickerCard({
-  symbol, watchlist, onWatch, onClick,
+  symbol, watchlist, onWatch, onClick, tickers, historyMap,
 }: {
   symbol: string;
   watchlist: Set<string>;
   onWatch: (s: string) => void;
   onClick: (s: string) => void;
+  tickers: Record<string, Ticker>;
+  historyMap: Record<string, number[]>;
 }) {
-  const t = TICKERS[symbol]!;
+  const t = tickers[symbol];
+  if (!t) return null;
   const isPos = t.dayChg >= 0;
   const sparkColor = isPos ? "var(--pos)" : "var(--neg)";
   const starred = watchlist.has(symbol);
@@ -258,7 +210,7 @@ function TickerCard({
         <SignalBadge signal={t.signal} />
       </div>
 
-      <Sparkline symbol={symbol} color={sparkColor} w={166} h={32} />
+      <Sparkline symbol={symbol} color={sparkColor} w={166} h={32} tickers={tickers} historyMap={historyMap} />
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <span className="num" style={{ fontSize: 15, fontWeight: 700 }}>{priceStr(t.price, t.currency)}</span>
@@ -287,18 +239,38 @@ function TickerCard({
 // ─── detail drawer ────────────────────────────────────────────────────────────
 
 function DetailDrawer({
-  symbol, watchlist, onWatch, onClose,
+  symbol, watchlist, onWatch, onClose, onBuy, tickers, historyMap, usdTwd,
 }: {
   symbol: string | null;
   watchlist: Set<string>;
   onWatch: (s: string) => void;
   onClose: () => void;
+  onBuy: (symbol: string) => void;
+  tickers: Record<string, Ticker>;
+  historyMap: Record<string, number[]>;
+  usdTwd: number;
 }) {
   const [range, setRange] = useState<Range>("1Y");
   const ranges: Range[] = ["1M", "3M", "1Y", "5Y"];
 
+  const [news, setNews]           = useState<NewsItem[]>([]);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const fetchedFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!symbol || fetchedFor.current === symbol) return;
+    fetchedFor.current = symbol;
+    setNews([]);
+    setNewsLoading(true);
+    fetch(`/api/quotes/news?symbol=${encodeURIComponent(symbol)}`)
+      .then((r) => r.ok ? r.json() : { news: [] })
+      .then((data: { news: NewsItem[] }) => setNews(data.news ?? []))
+      .catch(() => setNews([]))
+      .finally(() => setNewsLoading(false));
+  }, [symbol]);
+
   if (!symbol) return null;
-  const t = TICKERS[symbol]!;
+  const t = tickers[symbol]!;
   const isPos = t.dayChg >= 0;
   const starred = watchlist.has(symbol);
 
@@ -312,8 +284,8 @@ function DetailDrawer({
     { label: "殖利率", value: t.yld !== null ? t.yld.toFixed(1) + "%" : "—" },
     { label: "AUM",  value: t.aum !== null  ? (t.aum >= 1000 ? `${(t.aum / 1000).toFixed(1)}T` : `${t.aum}B`) : "—" },
     { label: "費率",  value: t.er !== undefined ? t.er.toFixed(2) + "%" : "—" },
-    { label: "52W 高", value: priceStr(t.price * 1.13, t.currency) },
-    { label: "52W 低", value: priceStr(t.price * 0.77, t.currency) },
+    { label: "52W 高", value: priceStr(t.high52w, t.currency) },
+    { label: "52W 低", value: priceStr(t.low52w, t.currency) },
   ];
 
   return (
@@ -350,7 +322,7 @@ function DetailDrawer({
           </div>
           {t.currency === "USD" && (
             <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>
-              ≈ NT${Math.round(t.price * USD_TWD).toLocaleString("zh-TW")}
+              ≈ NT${Math.round(t.price * usdTwd).toLocaleString("zh-TW")}
             </div>
           )}
         </div>
@@ -362,7 +334,7 @@ function DetailDrawer({
               <button key={r} className={`seg-btn${range === r ? " active" : ""}`} style={{ fontSize: 11, padding: "3px 9px" }} onClick={() => setRange(r)}>{r}</button>
             ))}
           </div>
-          <PriceChart symbol={symbol} range={range} />
+          <PriceChart symbol={symbol} range={range} tickers={tickers} historyMap={historyMap} />
           <div style={{ display: "flex", justifyContent: "space-around", marginTop: 10 }}>
             {(["w1", "m1", "m3", "y1"] as const).map((k) => {
               const label = { w1: "1W", m1: "1M", m3: "3M", y1: "1Y" }[k];
@@ -402,10 +374,34 @@ function DetailDrawer({
         {/* news */}
         <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)", overflowY: "auto", flex: 1, minHeight: 0 }}>
           <div style={{ fontSize: 9.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>近期動態</div>
-          {getMockNews(symbol).map((n, i) => (
-            <div key={i} style={{ padding: "8px 0", borderBottom: i < 2 ? "1px solid var(--border-soft)" : "none" }}>
-              <div style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.45 }}>{n.title}</div>
-              <div style={{ fontSize: 10, color: "var(--faint)", marginTop: 3 }}>{n.date}</div>
+          {newsLoading && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {[1, 2, 3].map((i) => (
+                <div key={i} style={{ padding: "8px 0", borderBottom: i < 3 ? "1px solid var(--border-soft)" : "none" }}>
+                  <div style={{ height: 12, borderRadius: 4, background: "var(--border-strong)", width: "90%", marginBottom: 6 }} />
+                  <div style={{ height: 10, borderRadius: 4, background: "var(--border-strong)", width: "60%" }} />
+                </div>
+              ))}
+            </div>
+          )}
+          {!newsLoading && news.length === 0 && (
+            <div style={{ fontSize: 12, color: "var(--faint)", padding: "8px 0" }}>暫無相關新聞</div>
+          )}
+          {!newsLoading && news.map((n, i) => (
+            <div key={i} style={{ padding: "8px 0", borderBottom: i < news.length - 1 ? "1px solid var(--border-soft)" : "none" }}>
+              <a
+                href={n.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontSize: 12, color: "var(--text-soft)", lineHeight: 1.45, textDecoration: "none", display: "block" }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-soft)")}
+              >
+                {n.title}
+              </a>
+              <div style={{ fontSize: 10, color: "var(--faint)", marginTop: 3 }}>
+                {n.source} · {new Date(n.publishedAt).toLocaleDateString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              </div>
             </div>
           ))}
         </div>
@@ -415,7 +411,9 @@ function DetailDrawer({
           <button className="btn btn-sm" onClick={() => onWatch(symbol)}>
             {starred ? "★ 已自選" : "☆ 加自選"}
           </button>
-          <button className="btn btn-sm btn-primary" style={{ marginLeft: "auto" }}>紀錄買入</button>
+          <button className="btn btn-sm btn-primary" style={{ marginLeft: "auto" }} onClick={() => { onBuy(symbol); onClose(); }}>
+            + 紀錄買入
+          </button>
         </div>
       </div>
     </>
@@ -424,29 +422,33 @@ function DetailDrawer({
 
 // ─── add/edit holding modal ───────────────────────────────────────────────────
 
-const SYMBOL_OPTIONS = Object.entries(TICKERS).map(([sym, t]) => ({
-  sym, label: `${sym} · ${t.name}`, currency: t.currency,
-}));
-
 function HoldingModal({
   existing,
+  defaultSymbol,
   onClose,
   onSaved,
   onDeleted,
+  tickers,
 }: {
   existing: HoldingRow | null;
+  defaultSymbol?: string;
   onClose: () => void;
   onSaved: (h: HoldingRow) => void;
   onDeleted?: (id: number) => void;
+  tickers: Record<string, Ticker>;
 }) {
-  const [symbol, setSymbol]   = useState(existing?.symbol ?? "");
+  const [symbol, setSymbol]   = useState(existing?.symbol ?? defaultSymbol ?? "");
   const [qty,    setQty]      = useState(existing ? String(existing.qty) : "");
   const [cost,   setCost]     = useState(existing ? String(existing.costAvg) : "");
   const [saving, setSaving]   = useState(false);
   const [error,  setError]    = useState<string | null>(null);
 
+  const symbolOptions = Object.entries(tickers).map(([sym, t]) => ({
+    sym, label: `${sym} · ${t.name}`, currency: t.currency,
+  }));
+
   const symUp = symbol.trim().toUpperCase();
-  const ticker = TICKERS[symUp];
+  const ticker = tickers[symUp];
   const currency: "TWD" | "USD" = ticker?.currency ?? (existing?.currency as "TWD" | "USD") ?? "TWD";
   const currencyLabel = currency === "USD" ? "USD ($)" : "TWD (NT$)";
 
@@ -507,7 +509,7 @@ function HoldingModal({
               style={existing ? { opacity: 0.6 } : {}}
             />
             <datalist id="holding-symbols">
-              {SYMBOL_OPTIONS.map((o) => (
+              {symbolOptions.map((o) => (
                 <option key={o.sym} value={o.sym}>{o.label}</option>
               ))}
             </datalist>
@@ -566,21 +568,177 @@ function HoldingModal({
   );
 }
 
+// ─── rebalance modal ──────────────────────────────────────────────────────────
+
+function RebalanceModal({
+  onClose,
+  totalMV,
+  actualAlloc,
+  computedHoldings,
+  onBuy,
+}: {
+  onClose: () => void;
+  totalMV: number;
+  actualAlloc: Record<string, number>;
+  computedHoldings: { symbol: string; t: Ticker; mvTWD: number; pnl: number; pnlPct: number; qty: number; costAvg: number; currency: string; id: number }[];
+  onBuy: (sym: string) => void;
+}) {
+  const TARGET_ALLOC_LOCAL: Record<string, number> = { 台股: 25, 美股: 45, 債券: 20, 現金: 10 };
+  const ALLOC_CATS_LOCAL = ["台股", "美股", "債券", "現金"] as const;
+  const REGION_CAT: Record<string, string> = { TW: "台股", US: "美股", BOND: "債券" };
+
+  // Core tickers to suggest buying per category (in preference order)
+  const BUY_SUGGEST: Record<string, string[]> = {
+    台股: ["0050", "006208"],
+    美股: ["VT", "VOO"],
+    債券: ["BNDW", "BND"],
+  };
+
+  const rows = ALLOC_CATS_LOCAL.map((cat) => {
+    const target = TARGET_ALLOC_LOCAL[cat]!;
+    const actual = actualAlloc[cat] ?? 0;
+    const gapPct = target - actual;
+    const gapTWD = (gapPct / 100) * totalMV;
+
+    // Suggest a ticker to buy/sell
+    let suggest: string | null = null;
+    if (gapPct > 2) {
+      suggest = BUY_SUGGEST[cat]?.[0] ?? null;
+    } else if (gapPct < -2) {
+      // Suggest trimming the largest holding in this category
+      const inCat = computedHoldings
+        .filter((h) => REGION_CAT[h.t.region] === cat)
+        .sort((a, b) => b.mvTWD - a.mvTWD);
+      suggest = inCat[0]?.symbol ?? null;
+    }
+
+    return { cat, target, actual, gapPct, gapTWD, suggest };
+  });
+
+  const hasAction = rows.some((r) => Math.abs(r.gapPct) >= 2.5);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+        <header className="modal-head">
+          <div>
+            <div className="crumb">投資組合</div>
+            <h2 className="modal-title">再平衡建議</h2>
+          </div>
+          <button className="icon-btn" onClick={onClose} aria-label="關閉">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </header>
+
+        <div className="modal-body" style={{ padding: 0 }}>
+          {!hasAction && (
+            <div style={{ padding: "24px 20px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>
+              配置已接近目標，暫無再平衡需求。
+            </div>
+          )}
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr>
+                {["類別", "目標", "目前", "差距金額", "建議操作"].map((h, i) => (
+                  <th key={h} style={{ fontSize: 10.5, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", padding: "12px 16px 8px", textAlign: i === 0 ? "left" : "right", whiteSpace: "nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ cat, target, actual, gapPct, gapTWD, suggest }) => {
+                const neutral = Math.abs(gapPct) < 2.5;
+                const buying  = gapPct >= 2.5;
+                const action  = neutral ? "持平" : buying ? `加碼 ${suggest ?? ""}` : `減碼 ${suggest ?? ""}`;
+                const actionColor = neutral ? "var(--muted)" : buying ? "var(--pos)" : "var(--neg)";
+                return (
+                  <tr key={cat}>
+                    <td style={{ padding: "10px 16px", borderTop: "1px solid var(--border-soft)", textAlign: "left", fontWeight: 500 }}>{cat}</td>
+                    <td className="num" style={{ padding: "10px 16px", borderTop: "1px solid var(--border-soft)", textAlign: "right", color: "var(--muted)" }}>{target}%</td>
+                    <td className="num" style={{ padding: "10px 16px", borderTop: "1px solid var(--border-soft)", textAlign: "right" }}>{actual.toFixed(1)}%</td>
+                    <td className={`num ${neutral ? "muted" : buying ? "pos" : "neg"}`} style={{ padding: "10px 16px", borderTop: "1px solid var(--border-soft)", textAlign: "right" }}>
+                      {neutral ? "—" : (buying ? "+" : "") + "NT$" + Math.abs(Math.round(gapTWD)).toLocaleString("zh-TW")}
+                    </td>
+                    <td style={{ padding: "10px 16px", borderTop: "1px solid var(--border-soft)", textAlign: "right" }}>
+                      {!neutral && suggest ? (
+                        <button
+                          className="btn btn-sm"
+                          style={{ fontSize: 11, color: actionColor, borderColor: neutral ? undefined : actionColor, opacity: 0.9 }}
+                          onClick={() => { onClose(); onBuy(suggest); }}
+                        >
+                          {action}
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: 12, color: actionColor, fontWeight: 700 }}>{action}</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border-soft)", fontSize: 11, color: "var(--faint)", lineHeight: 1.5 }}>
+            差距金額 = 缺口百分比 × 投資組合總市值。點擊加碼／減碼直接開啟新增持倉表單。
+          </div>
+        </div>
+
+        <div className="modal-foot">
+          <div style={{ marginLeft: "auto" }}>
+            <button className="btn btn-sm" onClick={onClose}>關閉</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── main view ────────────────────────────────────────────────────────────────
 
-export function InvestmentsView({ initialHoldings }: { initialHoldings: HoldingRow[] }) {
+export function InvestmentsView({
+  initialHoldings,
+  tickers,
+  historyMap,
+  quotesUpdatedAt,
+  usdTwd: usdTwdProp,
+}: {
+  initialHoldings: HoldingRow[];
+  tickers: Record<string, Ticker>;
+  historyMap: Record<string, number[]>;
+  quotesUpdatedAt: string | null;
+  usdTwd: number;
+}) {
+  const USD_TWD = usdTwdProp > 0 ? usdTwdProp : USD_TWD_FALLBACK;
   const router = useRouter();
   const [holdings, setHoldings]           = useState<HoldingRow[]>(initialHoldings);
   const [search, setSearch]               = useState("");
   const [drawerSymbol, setDrawerSymbol]   = useState<string | null>(null);
   const [watchlist, setWatchlist]         = useState<Set<string>>(() => new Set(["VT", "0050"]));
   const [holdingsSort, setHoldingsSort]   = useState<"alloc" | "pnl">("alloc");
-  const [modalOpen, setModalOpen]         = useState(false);
-  const [editingHolding, setEditingHolding] = useState<HoldingRow | null>(null);
+  const [modalOpen, setModalOpen]             = useState(false);
+  const [editingHolding, setEditingHolding]   = useState<HoldingRow | null>(null);
+  const [modalDefaultSym, setModalDefaultSym] = useState<string | undefined>(undefined);
+  const [rebalanceOpen, setRebalanceOpen]     = useState(false);
+  const [refreshing, setRefreshing]           = useState(false);
+  const [lastUpdated, setLastUpdated]         = useState<string | null>(quotesUpdatedAt);
 
-  function openAdd() { setEditingHolding(null); setModalOpen(true); }
-  function openEdit(h: HoldingRow) { setEditingHolding(h); setModalOpen(true); }
-  function closeModal() { setModalOpen(false); setEditingHolding(null); }
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      const res = await fetch("/api/quotes/refresh", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setLastUpdated(data.updatedAt);
+        router.refresh();
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  function openAdd(sym?: string) { setEditingHolding(null); setModalDefaultSym(sym); setModalOpen(true); }
+  function openEdit(h: HoldingRow) { setEditingHolding(h); setModalDefaultSym(undefined); setModalOpen(true); }
+  function closeModal() { setModalOpen(false); setEditingHolding(null); setModalDefaultSym(undefined); }
 
   function handleSaved(h: HoldingRow) {
     setHoldings((prev) => {
@@ -597,11 +755,11 @@ export function InvestmentsView({ initialHoldings }: { initialHoldings: HoldingR
   }
 
   const computedHoldings = useMemo(() =>
-    holdings.filter((h) => TICKERS[h.symbol]).map((h) => {
-      const t = TICKERS[h.symbol]!;
+    holdings.filter((h) => tickers[h.symbol]).map((h) => {
+      const t = tickers[h.symbol]!;
       const mvLocal = t.price * h.qty;
-      const mvTWD   = toTWD(mvLocal, t.currency);
-      const costTWD = toTWD(h.costAvg * h.qty, t.currency);
+      const mvTWD   = toTWD(mvLocal, t.currency, USD_TWD);
+      const costTWD = toTWD(h.costAvg * h.qty, t.currency, USD_TWD);
       const pnl     = mvTWD - costTWD;
       const pnlPct  = (pnl / costTWD) * 100;
       return { ...h, t, mvTWD, pnl, pnlPct };
@@ -626,12 +784,12 @@ export function InvestmentsView({ initialHoldings }: { initialHoldings: HoldingR
     return { 台股: tw, 美股: us, 債券: bond, 現金: Math.max(0, 100 - tw - us - bond) };
   }, [computedHoldings, totalMV]);
 
-  const todayPnl  = useMemo(() => computedHoldings.reduce((a, h) => a + toTWD(h.t.price * h.t.dayChg / 100 * h.qty, h.t.currency), 0), [computedHoldings]);
-  const monthPnl  = useMemo(() => computedHoldings.reduce((a, h) => a + toTWD(h.t.price * h.t.m1   / 100 * h.qty, h.t.currency), 0), [computedHoldings]);
+  const todayPnl  = useMemo(() => computedHoldings.reduce((a, h) => a + toTWD(h.t.price * h.t.dayChg / 100 * h.qty, h.t.currency, USD_TWD), 0), [computedHoldings]);
+  const monthPnl  = useMemo(() => computedHoldings.reduce((a, h) => a + toTWD(h.t.price * h.t.m1   / 100 * h.qty, h.t.currency, USD_TWD), 0), [computedHoldings]);
   const ret12M    = useMemo(() => {
     let cost = 0, gain = 0;
     for (const h of computedHoldings) {
-      const c = toTWD(h.t.price * h.qty, h.t.currency);
+      const c = toTWD(h.t.price * h.qty, h.t.currency, USD_TWD);
       cost += c; gain += c * (h.t.y1 / 100);
     }
     return cost > 0 ? (gain / cost) * 100 : 0;
@@ -657,13 +815,14 @@ export function InvestmentsView({ initialHoldings }: { initialHoldings: HoldingR
     return CAROUSEL_ROWS.map((row) => ({
       ...row,
       symbols: row.symbols.filter((s) =>
-        s.toLowerCase().includes(q) || (TICKERS[s]?.name ?? "").toLowerCase().includes(q),
+        s.toLowerCase().includes(q) || (tickers[s]?.name ?? "").toLowerCase().includes(q),
       ),
     })).filter((row) => row.symbols.length > 0);
-  }, [search]);
+  }, [search, tickers]);
 
   return (
     <main className="main">
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       {/* ── topbar ── */}
       <div className="topbar">
         <div>
@@ -673,6 +832,22 @@ export function InvestmentsView({ initialHoldings }: { initialHoldings: HoldingR
           </h1>
         </div>
         <div className="topbar-actions">
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {lastUpdated && (
+              <span style={{ fontSize: 11, color: "var(--muted)" }}>
+                最後更新 {new Date(lastUpdated).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
+            <button className="btn" onClick={handleRefresh} disabled={refreshing}>
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={refreshing ? { animation: "spin 1s linear infinite" } : {}}>
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                <path d="M21 3v5h-5" />
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                <path d="M8 16H3v5" />
+              </svg>
+              {refreshing ? "更新中…" : "更新報價"}
+            </button>
+          </div>
           <div className="search" style={{ minWidth: 200 }}>
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
@@ -693,13 +868,7 @@ export function InvestmentsView({ initialHoldings }: { initialHoldings: HoldingR
               </button>
             )}
           </div>
-          <button className="btn">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
-            </svg>
-            匯入交易
-          </button>
-          <button className="btn btn-primary" onClick={openAdd}>
+          <button className="btn btn-primary" onClick={() => openAdd()}>
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <path d="M12 5v14M5 12h14" />
             </svg>
@@ -756,7 +925,7 @@ export function InvestmentsView({ initialHoldings }: { initialHoldings: HoldingR
             <div className="card-title">配置缺口</div>
             <div className="card-sub muted">Robo 建議 vs. 目前持有</div>
           </div>
-          <button className="btn btn-sm">依此再平衡</button>
+          <button className="btn btn-sm" onClick={() => setRebalanceOpen(true)} disabled={totalMV === 0}>依此再平衡</button>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -834,7 +1003,7 @@ export function InvestmentsView({ initialHoldings }: { initialHoldings: HoldingR
         <div className="card-head">
           <div>
             <div className="card-title">持有部位</div>
-            <div className="card-sub muted">總市值 {fmtTWD(totalMV, true)} · USD/TWD @{USD_TWD}</div>
+            <div className="card-sub muted">總市值 {fmtTWD(totalMV, true)} · USD/TWD @{USD_TWD.toFixed(2)}</div>
           </div>
           <div className="seg">
             <button className={`seg-btn${holdingsSort === "alloc" ? " active" : ""}`} onClick={() => setHoldingsSort("alloc")}>配置</button>
@@ -844,7 +1013,7 @@ export function InvestmentsView({ initialHoldings }: { initialHoldings: HoldingR
         {sortedHoldings.length === 0 ? (
           <div style={{ padding: "32px 0", textAlign: "center", color: "var(--muted)" }}>
             <div style={{ fontSize: 14, marginBottom: 10 }}>尚未新增任何持倉</div>
-            <button className="btn btn-primary btn-sm" onClick={openAdd}>+ 新增第一筆持倉</button>
+            <button className="btn btn-primary btn-sm" onClick={() => openAdd()}>+ 新增第一筆持倉</button>
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
@@ -893,7 +1062,7 @@ export function InvestmentsView({ initialHoldings }: { initialHoldings: HoldingR
                         </div>
                       </td>
                       <td>
-                        <Sparkline symbol={h.symbol} color={h.pnl >= 0 ? "var(--pos)" : "var(--neg)"} w={58} h={22} />
+                        <Sparkline symbol={h.symbol} color={h.pnl >= 0 ? "var(--pos)" : "var(--neg)"} w={58} h={22} tickers={tickers} historyMap={historyMap} />
                       </td>
                       <td>
                         <button
@@ -937,6 +1106,8 @@ export function InvestmentsView({ initialHoldings }: { initialHoldings: HoldingR
                     watchlist={watchlist}
                     onWatch={toggleWatch}
                     onClick={setDrawerSymbol}
+                    tickers={tickers}
+                    historyMap={historyMap}
                   />
                 ))}
               </div>
@@ -961,7 +1132,7 @@ export function InvestmentsView({ initialHoldings }: { initialHoldings: HoldingR
           </div>
           <div>
             {[...watchlist].map((s) => {
-              const t = TICKERS[s];
+              const t = tickers[s];
               if (!t) return null;
               const isPos = t.dayChg >= 0;
               return (
@@ -1018,15 +1189,32 @@ export function InvestmentsView({ initialHoldings }: { initialHoldings: HoldingR
         watchlist={watchlist}
         onWatch={toggleWatch}
         onClose={() => setDrawerSymbol(null)}
+        onBuy={(sym) => { setDrawerSymbol(null); openAdd(sym); }}
+        tickers={tickers}
+        historyMap={historyMap}
+        usdTwd={USD_TWD}
       />
+
+      {/* ── rebalance modal ── */}
+      {rebalanceOpen && (
+        <RebalanceModal
+          onClose={() => setRebalanceOpen(false)}
+          totalMV={totalMV}
+          actualAlloc={actualAlloc}
+          computedHoldings={computedHoldings}
+          onBuy={(sym) => { setRebalanceOpen(false); openAdd(sym); }}
+        />
+      )}
 
       {/* ── add/edit holding modal ── */}
       {modalOpen && (
         <HoldingModal
           existing={editingHolding}
+          defaultSymbol={modalDefaultSym}
           onClose={closeModal}
           onSaved={handleSaved}
           onDeleted={handleDeleted}
+          tickers={tickers}
         />
       )}
     </main>
