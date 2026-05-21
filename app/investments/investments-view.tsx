@@ -193,6 +193,7 @@ function TickerCard({
 }) {
   const t = tickers[symbol];
   if (!t) return null;
+  const hasData = t.price > 0;
   const isPos = t.dayChg >= 0;
   const sparkColor = isPos ? "var(--pos)" : "var(--neg)";
   const starred = watchlist.has(symbol);
@@ -213,13 +214,19 @@ function TickerCard({
       <Sparkline symbol={symbol} color={sparkColor} w={166} h={32} tickers={tickers} historyMap={historyMap} />
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <span className="num" style={{ fontSize: 15, fontWeight: 700 }}>{priceStr(t.price, t.currency)}</span>
-        <span className={`num ${isPos ? "pos" : "neg"}`} style={{ fontSize: 12 }}>{pct(t.dayChg)}</span>
+        {hasData ? (
+          <>
+            <span className="num" style={{ fontSize: 15, fontWeight: 700 }}>{priceStr(t.price, t.currency)}</span>
+            <span className={`num ${isPos ? "pos" : "neg"}`} style={{ fontSize: 12 }}>{pct(t.dayChg)}</span>
+          </>
+        ) : (
+          <span style={{ fontSize: 12, color: "var(--faint)" }}>報價待更新</span>
+        )}
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ fontSize: 11, color: "var(--muted)" }}>
-          {t.pe !== null ? `P/E ${t.pe}` : t.yld !== null ? `殖利率 ${t.yld}%` : ""}
+          {hasData && (t.pe !== null ? `P/E ${t.pe}` : t.yld !== null ? `殖利率 ${t.yld}%` : "")}
         </span>
         <button
           className="icon-btn ghost"
@@ -271,21 +278,24 @@ function DetailDrawer({
 
   if (!symbol) return null;
   const t = tickers[symbol]!;
+  const hasData = t.price > 0;
   const isPos = t.dayChg >= 0;
   const starred = watchlist.has(symbol);
 
-  const valLabel = t.pe !== null
-    ? (t.pe < 15 ? "便宜" : t.pe < 24 ? "合理" : "偏貴")
-    : (t.yld !== null && t.yld > 4.5 ? "殖利率佳" : "合理");
-  const valColor = (valLabel === "便宜" || valLabel === "殖利率佳") ? "var(--pos)" : valLabel === "偏貴" ? "var(--neg)" : "var(--warn)";
+  const valLabel = !hasData
+    ? "待更新"
+    : t.pe !== null
+      ? (t.pe < 15 ? "便宜" : t.pe < 24 ? "合理" : "偏貴")
+      : (t.yld !== null && t.yld > 4.5 ? "殖利率佳" : "合理");
+  const valColor = (!hasData || valLabel === "合理") ? "var(--warn)" : (valLabel === "便宜" || valLabel === "殖利率佳") ? "var(--pos)" : valLabel === "偏貴" ? "var(--neg)" : "var(--muted)";
 
   const metrics = [
     { label: "P/E",  value: t.pe !== null  ? t.pe.toFixed(1)    : "—" },
     { label: "殖利率", value: t.yld !== null ? t.yld.toFixed(1) + "%" : "—" },
     { label: "AUM",  value: t.aum !== null  ? (t.aum >= 1000 ? `${(t.aum / 1000).toFixed(1)}T` : `${t.aum}B`) : "—" },
     { label: "費率",  value: t.er !== undefined ? t.er.toFixed(2) + "%" : "—" },
-    { label: "52W 高", value: priceStr(t.high52w, t.currency) },
-    { label: "52W 低", value: priceStr(t.low52w, t.currency) },
+    { label: "52W 高", value: hasData ? priceStr(t.high52w, t.currency) : "—" },
+    { label: "52W 低", value: hasData ? priceStr(t.low52w, t.currency) : "—" },
   ];
 
   return (
@@ -311,6 +321,7 @@ function DetailDrawer({
 
         {/* price */}
         <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+          {hasData ? (
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
             <span className="num" style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em" }}>
               {priceStr(t.price, t.currency)}
@@ -320,7 +331,10 @@ function DetailDrawer({
               {pct(t.dayChg)}
             </span>
           </div>
-          {t.currency === "USD" && (
+          ) : (
+            <div style={{ fontSize: 13, color: "var(--faint)" }}>報價尚未載入，請點擊「更新報價」</div>
+          )}
+          {hasData && t.currency === "USD" && (
             <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>
               ≈ NT${Math.round(t.price * usdTwd).toLocaleString("zh-TW")}
             </div>

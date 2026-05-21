@@ -7,7 +7,7 @@ const YAHOO_SYM: Record<string, string> = {
   "006208": "006208.TW",
   "0056":   "0056.TW",
   "00878":  "00878.TW",
-  "00679B": "00679B.TW",
+  "00679B": "00679B.TWO",
   "2330":   "2330.TW",
   "2454":   "2454.TW",
   "2412":   "2412.TW",
@@ -150,8 +150,9 @@ export async function POST() {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Lowercase keys so "00679b.TW" from Yahoo matches "00679B.TW" in our map
   const yahooToInternal = Object.fromEntries(
-    Object.entries(YAHOO_SYM).map(([internal, yahoo]) => [yahoo, internal]),
+    Object.entries(YAHOO_SYM).map(([internal, yahoo]) => [yahoo.toLowerCase(), internal]),
   );
 
   // 1. Yahoo session — retry once on failure
@@ -199,7 +200,7 @@ export async function POST() {
       continue;
     }
 
-    const sym = yahooToInternal[yahooSym];
+    const sym = yahooToInternal[yahooSym.toLowerCase()];
     if (!sym) continue;
 
     const price    = (q.regularMarketPrice              as number | null) ?? 0;

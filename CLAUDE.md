@@ -69,6 +69,7 @@ app/
     page.tsx              # dashboard
     months/               # monthly cash flow list + new/edit forms
     goals/                # savings goals
+    investments/          # 投資 page — live quotes, holdings, allocation, market carousel
     statements/           # 財務報表 — interactive financial reports (client component)
     settings/             # household settings — members, permissions, invite links
   api/
@@ -77,6 +78,9 @@ app/
     dashboard/            # GET  — dashboard data (scoped to household)
     goals/                # POST — upsert goal; [id]/DELETE
     months/               # POST — upsert monthly summary; [year]/[month]/DELETE
+    holdings/             # POST — upsert holding; [id]/DELETE
+    quotes/refresh/       # POST — fetch live quotes from Yahoo Finance → stock_quotes + stock_history
+    quotes/news/          # GET  — fetch recent Google News for a ticker symbol
     invite/               # POST — generate invite token (owner only)
     invite/[token]/       # POST — accept invite (joins caller to household)
     household/members/[uid]/  # PATCH canEdit + displayName, DELETE member (owner only)
@@ -204,6 +208,38 @@ BNDW and VT carry `fxRisk: true` (USD-denominated, bought via Schwab wire). 0050
 **PFIC constraint** — 在台的美國公民 cannot hold Taiwan-domiciled ETFs (0050, 00679B, 00720B, etc.); they are PFICs and trigger Form 8621 + up to 37% punitive tax. Only 台灣人 can hold them. The advisor system prompt encodes this and surfaces warnings in the UI.
 
 - **Robo-advisor** — Gemini API integration for AI financial advice. `GEMINI_API_KEY` must be set in env.
+
+## 投資 page (`/investments`)
+
+The investments page pairs an RSC (`app/(protected)/investments/page.tsx`) with a large client component (`app/investments/investments-view.tsx`). The server page fetches holdings, quotes, and history from Neon, then builds a `tickers` record and passes it as props.
+
+**Sections:**
+- **KPI strip** — 投資總值 / 今日 P&L / 月度 P&L / 12M 報酬率 / 健康評分 (A/B/C weighted by market value)
+- **配置缺口** — stacked allocation bars (Robo target vs. actual); table with 加碼/減碼 action per category; 依此再平衡 modal
+- **持有部位** — sortable holdings table (by allocation or P&L); sparkline per row; click row opens detail drawer
+- **推薦標的** — `CAROUSEL_ROWS` from `lib/ticker-meta.ts`; grouped rows of `TickerCard` components; filterable by search
+- **自選股** — watchlist (client-side state, not persisted); renders as a compact list
+- **AI 投資顧問 banner** — links to `/goals` Robo-advisor modal
+- **Detail drawer** — slides in from the right; shows price chart (1M/3M/1Y/5Y), metrics, signal, AI note, and live Google News (from `/api/quotes/news`)
+
+**Data flow:**
+- Static metadata in `lib/ticker-meta.ts` (`TICKER_META`, `CAROUSEL_ROWS`, `ALL_SYMBOLS`)
+- Live quotes in `stock_quotes` Prisma model; history in `stock_history`
+- `POST /api/quotes/refresh` — fetches Yahoo Finance batch quotes + 1-year history for all symbols, upserts to Neon
+- Signal and health (買/守/賣, A/B/C) are computed server-side in `page.tsx` via `computeSignal()` — no live signal API
+- When `price === 0` (no live data), cards show "報價待更新" instead of a zero price
+
+**Yahoo Finance symbol mapping (`YAHOO_SYM` in `refresh/route.ts`):**
+- TWSE-listed stocks/ETFs: `{symbol}.TW` (e.g. `0050.TW`, `2330.TW`)
+- TPEx/OTC-listed ETFs: `{symbol}.TWO` (e.g. `00679B.TWO`) — bond ETFs with letter suffixes are often on TWO, NOT TW; using `.TW` returns HTTP 404
+- US ETFs/stocks: bare symbol (e.g. `VT`, `BND`)
+- The reverse lookup (`yahooToInternal`) is case-insensitive (lowercased) to handle Yahoo returning mixed-case symbols
+
+**Holdings API (`/api/holdings`):**
+- `POST` — upsert by symbol within the household; body: `{ symbol, qty, costAvg, currency }`
+- `DELETE /api/holdings/[id]` — scoped to household
+
+**Test account:** `mytest@test.com` / `testtest` — credentials in `.env.test` (gitignored)
 
 ## Mobile responsiveness
 

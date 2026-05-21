@@ -83,8 +83,8 @@ const RISK_META = {
 - Error messages from prior turns are stripped from history before sending
 
 **System prompt content:**
-- Household profile: N (Schwab, US-listed ETFs only) + J (TW brokerage, Taiwan-listed ETFs)
-- PFIC rules: N cannot buy 0050 / any Taiwan-domiciled ETF
+- Household profile: 在台的美國公民 (Schwab, US-listed ETFs only) + 台灣人 (TW brokerage, Taiwan-listed ETFs)
+- PFIC rules: 在台的美國公民 cannot buy 0050 / any Taiwan-domiciled ETF
 - Full asset universe with returns, currencies, costs, who can hold each
 - Wire transfer fee structure (NT$400–800/transfer + USD$10–30 intermediary)
 - Boglehead philosophy summary
@@ -94,12 +94,12 @@ const RISK_META = {
 
 ## PFIC constraint (critical)
 
-**N cannot hold Taiwan-domiciled ETFs** — they are PFICs. Buying them triggers:
+**在台的美國公民 cannot hold Taiwan-domiciled ETFs** — they are PFICs. Buying them triggers:
 - Annual Form 8621 filing per fund
 - Gains taxed at 37% ordinary income rate + interest penalties
 
-**Only J can hold:** 0050, 00679B, 00720B, or any Taiwan-listed fund.
-N can only buy US-listed ETFs through Schwab: VT, BNDW, BND, VTI, VXUS, etc.
+**Only 台灣人 can hold:** 0050, 00679B, 00720B, or any Taiwan-listed fund.
+在台的美國公民 can only buy US-listed ETFs through Schwab: VT, BNDW, BND, VTI, VXUS, etc.
 
 The UI tags 0050 with a red `PFIC` badge and shows an inline warning when it appears in a recommended mix. The advisor system prompt encodes this rule.
 
