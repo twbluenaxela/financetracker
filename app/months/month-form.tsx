@@ -195,10 +195,15 @@ export function MonthForm({
   const subtitle = mode === "edit" ? monthLabel(form.year, form.month) : "建立新月份";
 
   function patchLine(kind: "income" | "expense", next: MonthLine) {
-    setForm((prev) => ({
-      ...prev,
-      lines: prev.lines.map((line) => (line.id === next.id && line.kind === kind ? next : line)),
-    }));
+    setForm((prev) => {
+      const lines = prev.lines.map((line) => (line.id === next.id && line.kind === kind ? next : line));
+      const newSum = lines.filter((l) => l.kind === kind).reduce((acc, l) => acc + l.amount, 0);
+      return {
+        ...prev,
+        lines,
+        ...(kind === "income" ? { income: newSum } : { expense: newSum }),
+      };
+    });
   }
 
   function addLine(kind: "income" | "expense") {
@@ -217,10 +222,17 @@ export function MonthForm({
   }
 
   function deleteLine(id: number) {
-    setForm((prev) => ({
-      ...prev,
-      lines: prev.lines.filter((line) => line.id !== id),
-    }));
+    setForm((prev) => {
+      const removed = prev.lines.find((l) => l.id === id);
+      const lines = prev.lines.filter((line) => line.id !== id);
+      if (!removed) return { ...prev, lines };
+      const newSum = lines.filter((l) => l.kind === removed.kind).reduce((acc, l) => acc + l.amount, 0);
+      return {
+        ...prev,
+        lines,
+        ...(removed.kind === "income" ? { income: newSum } : { expense: newSum }),
+      };
+    });
   }
 
   const payload = useMemo(
