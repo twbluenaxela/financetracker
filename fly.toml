@@ -7,6 +7,11 @@ app = 'financetrackertw'
 primary_region = 'nrt'
 
 [build]
+  [build.args]
+    NEXT_PUBLIC_FIREBASE_API_KEY     = "AIzaSyDONo_JB9b0DEKknfNkXTQOYUhUOTYzIJ0"
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN = "financetracker-c0cea.firebaseapp.com"
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID  = "financetracker-c0cea"
+    NEXT_PUBLIC_FIREBASE_APP_ID      = "1:1002903147381:web:bb5fbbe7452f5da0e5393c"
 
 [deploy]
   release_command = 'node_modules/.bin/prisma db push'
