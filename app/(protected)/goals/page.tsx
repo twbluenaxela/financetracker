@@ -10,6 +10,11 @@ export default async function GoalsPage() {
     orderBy: [{ priority: "asc" }, { id: "asc" }],
   });
 
+  const member = await prisma.householdMember.findUnique({
+    where: { householdId_firebaseUid: { householdId: user.householdId, firebaseUid: user.uid } },
+    select: { roboPrompt: true },
+  });
+
   const latestMonth = await prisma.monthlySummary.findFirst({
     where: { householdId: user.householdId },
     orderBy: [{ year: "desc" }, { month: "desc" }],
@@ -25,6 +30,7 @@ export default async function GoalsPage() {
         surplus={surplus}
         income={income}
         expense={expense}
+        advisorPrompt={member?.roboPrompt ?? null}
         goals={goals.map((goal) => {
           const currentAmount = Number(goal.currentAmount);
           const targetAmount = Number(goal.targetAmount);

@@ -9,10 +9,16 @@ const schema = z
     canEdit: z.boolean().optional(),
     displayName: z.string().trim().max(50).nullable().optional(),
     photoUrl: z.string().max(200_000).nullable().optional(), // base64 data URL or remote URL
+    roboPrompt: z.string().max(6000).nullable().optional(), // custom robo-advisor system prompt
   })
-  .refine((d) => d.canEdit !== undefined || d.displayName !== undefined || d.photoUrl !== undefined, {
-    message: "no_op",
-  });
+  .refine(
+    (d) =>
+      d.canEdit !== undefined ||
+      d.displayName !== undefined ||
+      d.photoUrl !== undefined ||
+      d.roboPrompt !== undefined,
+    { message: "no_op" },
+  );
 
 export async function PATCH(
   request: Request,
@@ -33,7 +39,7 @@ export async function PATCH(
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: "invalid_input" }, { status: 400 });
 
-  const { canEdit, displayName, photoUrl } = parsed.data;
+  const { canEdit, displayName, photoUrl, roboPrompt } = parsed.data;
 
   // canEdit is owner-only and cannot target self
   if (canEdit !== undefined) {
@@ -41,11 +47,12 @@ export async function PATCH(
     if (isSelf) return NextResponse.json({ error: "cannot_modify_self" }, { status: 400 });
   }
 
-  // displayName / photoUrl: owner can do anyone; non-owner can only do self (already guarded above)
-  const data: { canEdit?: boolean; displayName?: string | null; photoUrl?: string | null } = {};
+  // displayName / photoUrl / roboPrompt: owner can do anyone; non-owner can only do self (already guarded above)
+  const data: { canEdit?: boolean; displayName?: string | null; photoUrl?: string | null; roboPrompt?: string | null } = {};
   if (canEdit !== undefined) data.canEdit = canEdit;
   if (displayName !== undefined) data.displayName = displayName || null;
   if (photoUrl !== undefined) data.photoUrl = photoUrl || null;
+  if (roboPrompt !== undefined) data.roboPrompt = roboPrompt?.trim() || null;
 
   await prisma.householdMember.update({
     where: {

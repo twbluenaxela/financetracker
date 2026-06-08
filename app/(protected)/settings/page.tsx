@@ -13,11 +13,14 @@ export default async function SettingsPage() {
     }),
   ]);
 
+  const currentMember = members.find((m) => m.firebaseUid === user.uid);
+
   return (
     <SettingsView
       isOwner={user.role === "owner"}
       household={{ id: user.householdId, name: household?.name ?? "家庭" }}
       currentUid={user.uid}
+      roboPrompt={currentMember?.roboPrompt ?? null}
       members={members.map((m) => ({
         uid: m.firebaseUid,
         role: m.role,

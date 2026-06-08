@@ -2,6 +2,8 @@
 
 import { useRef, useState, useTransition } from "react";
 
+import { DEFAULT_ADVISOR_PROMPT, ADVISOR_PROMPT_MAX } from "@/lib/advisor-prompt";
+
 type Member = {
   uid: string;
   role: string;
@@ -15,6 +17,7 @@ type Props = {
   isOwner: boolean;
   household: { id: number; name: string };
   currentUid: string;
+  roboPrompt: string | null;
   members: Member[];
 };
 
@@ -253,7 +256,7 @@ function MemberRow({
   );
 }
 
-export function SettingsView({ isOwner, household, currentUid, members: initialMembers }: Props) {
+export function SettingsView({ isOwner, household, currentUid, roboPrompt, members: initialMembers }: Props) {
   const [members, setMembers] = useState(initialMembers);
   const [householdName, setHouseholdName] = useState(household.name);
   const [editingName, setEditingName] = useState(false);
@@ -261,6 +264,28 @@ export function SettingsView({ isOwner, household, currentUid, members: initialM
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [copied, setCopied] = useState(false);
+
+  // Robo-advisor custom prompt (per-member). Empty input = use the shared default.
+  const [promptInput, setPromptInput] = useState(roboPrompt ?? "");
+  const [savedPrompt, setSavedPrompt] = useState(roboPrompt ?? "");
+  const [promptStatus, setPromptStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const promptDirty = promptInput.trim() !== savedPrompt.trim();
+  const usingDefault = savedPrompt.trim() === "";
+
+  async function savePrompt() {
+    const trimmed = promptInput.trim();
+    setPromptStatus("saving");
+    const res = await fetch(`/api/household/members/${currentUid}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ roboPrompt: trimmed || null }),
+    });
+    if (!res.ok) { setPromptStatus("idle"); return; }
+    setSavedPrompt(trimmed);
+    setPromptInput(trimmed);
+    setPromptStatus("saved");
+    setTimeout(() => setPromptStatus("idle"), 2000);
+  }
 
   async function saveName() {
     const trimmed = nameInput.trim();
@@ -440,6 +465,65 @@ export function SettingsView({ isOwner, household, currentUid, members: initialM
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: "1.5rem" }}>
+        <div className="card-head">
+          <div>
+            <div className="card-title">理財顧問 AI</div>
+            <div className="card-sub muted">自訂理財目標頁的「智能投資顧問」對話指令（System Prompt）。此設定只套用於你自己的帳號。</div>
+          </div>
+          <span className={"chip " + (usingDefault ? "chip-muted" : "chip-pos")}>
+            {usingDefault ? "使用預設" : "自訂中"}
+          </span>
+        </div>
+        <div style={{ padding: "0 1.5rem 1.5rem" }}>
+          <textarea
+            value={promptInput}
+            onChange={(e) => setPromptInput(e.target.value)}
+            maxLength={ADVISOR_PROMPT_MAX}
+            rows={12}
+            placeholder={DEFAULT_ADVISOR_PROMPT}
+            spellCheck={false}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              background: "var(--panel)",
+              border: "1px solid var(--border-strong)",
+              borderRadius: "var(--radius-sm)",
+              padding: "0.7rem 0.85rem",
+              color: "var(--text)",
+              fontSize: "0.82rem",
+              lineHeight: 1.6,
+              fontFamily: "var(--font-mono, monospace)",
+              resize: "vertical",
+              minHeight: 200,
+            }}
+          />
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
+            <button className="btn btn-primary" onClick={savePrompt} disabled={!promptDirty || promptStatus === "saving"}>
+              {promptStatus === "saving" ? "儲存中…" : promptStatus === "saved" ? "已儲存 ✓" : "儲存"}
+            </button>
+            <button
+              className="btn btn-ghost"
+              onClick={() => setPromptInput(DEFAULT_ADVISOR_PROMPT)}
+              disabled={promptInput.trim() === DEFAULT_ADVISOR_PROMPT.trim()}
+            >
+              載入預設範本
+            </button>
+            {!usingDefault && (
+              <button className="btn btn-ghost" onClick={() => setPromptInput("")}>
+                清空（恢復預設）
+              </button>
+            )}
+            <span className="muted" style={{ fontSize: "0.75rem", marginLeft: "auto" }}>
+              {promptInput.length} / {ADVISOR_PROMPT_MAX}
+            </span>
+          </div>
+          <p className="muted" style={{ fontSize: "0.8rem", lineHeight: 1.7, marginTop: "0.75rem", marginBottom: 0 }}>
+            留空即使用內建預設顧問指令（含 PFIC 限制、Boglehead 配置邏輯等）。顧問每次對話仍會自動附上你家庭的即時財務數據。
+          </p>
         </div>
       </div>
 
