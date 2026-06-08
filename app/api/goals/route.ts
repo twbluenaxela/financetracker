@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -44,5 +45,7 @@ export async function POST(request: Request) {
         data: { ...payload, householdId: user.householdId },
       });
 
+  revalidatePath("/");
+  revalidatePath("/statements");
   return NextResponse.json({ ok: true, id: goal.id });
 }

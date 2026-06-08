@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { getSessionUser } from "@/lib/auth";
@@ -21,5 +22,8 @@ export async function DELETE(
     },
   });
 
+  revalidatePath("/");
+  revalidatePath("/months");
+  revalidatePath("/statements");
   return NextResponse.json({ ok: true });
 }

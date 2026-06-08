@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { getSessionUser } from "@/lib/auth";
@@ -13,5 +14,7 @@ export async function DELETE(
 
   const { id } = await params;
   await prisma.goal.delete({ where: { id: Number(id), householdId: user.householdId } });
+  revalidatePath("/");
+  revalidatePath("/statements");
   return NextResponse.json({ ok: true });
 }
